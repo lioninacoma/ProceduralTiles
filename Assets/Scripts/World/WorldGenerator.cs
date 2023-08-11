@@ -16,6 +16,7 @@ public class WorldGenerator : MonoBehaviour
     [Range(0, 100)] public int relaxIterations = 50;
     [Range(0, .46f)] public float relaxScale = .1f;
     [Range(0, 1)] public int relaxType = 0;
+    public int seed = 123;
 
     public Tile[] tiles;
     public Material tileMaterial;
@@ -42,14 +43,14 @@ public class WorldGenerator : MonoBehaviour
 
     private void InitGrid()
     {
+        UnityEngine.Random.InitState(seed);
         grid = new Grid();
-        grid.Build(radius, div, relaxIterations, relaxScale, relaxType);
+        grid.Build(radius, div, relaxIterations, relaxScale, relaxType, seed);
     }
 
     // Start is called before the first frame update
     void Start()
     {
-        UnityEngine.Random.InitState(123);
         tileMeshes = new TileMesh[tiles.Length];
         for (int i = 0; i < tileMeshes.Length; i++)
         {
@@ -82,26 +83,35 @@ public class WorldGenerator : MonoBehaviour
         tileMesh.GetMesh(meshFilter, cell, grid);
     }
 
-    private Tile[] GetConnectingTiles(Cell cell, List<Cell> neighbours)
+    private Tile[] GetConnectingTiles(Cell cell)
     {
         Cell neighbour;
         Tile neighbourTile;
-        int cn, nc;
+
+        int point, conNeighbour, n;
         IEnumerable<Tile> connectingTiles = tiles.ToList();
 
-        for (int dir = 0; dir < neighbours.Count; dir++)
+        for (int i = 0; i < cell.Points.Length; i++)
         {
-            neighbour = neighbours[dir];
-            cn = cell.GetNeighbourIndex(neighbour);
-            nc = neighbour.GetNeighbourIndex(cell);
-            neighbourTile = tiles[neighbour.OccTileIndex];
-            connectingTiles = neighbourTile.ConnectingTiles(connectingTiles, nc, cn);
+            point = cell.Points[i];
+
+            for (int j = 0; j < cell.NeighboursOfPoints[i].Length; j++)
+            {
+                n = cell.NeighboursOfPoints[i][j];
+                neighbour = grid.GetCell(cell.Neighbours[n]);
+
+                if (neighbour.OccTileIndex >= 0)
+                {
+                    neighbourTile = tiles[neighbour.OccTileIndex];
+                    conNeighbour = neighbour.IndicesOfPoints[point];
+                    connectingTiles = neighbourTile.ConnectingTiles(connectingTiles, conNeighbour, i);
+                }
+            }
         }
 
         return connectingTiles.ToArray();
     }
 
-    // Update is called once per frame
     void Update()
     {
         if (Input.GetMouseButtonUp(0))
@@ -113,14 +123,7 @@ public class WorldGenerator : MonoBehaviour
 
             if (cell != null && !cell.Occupied)
             {
-                var allowedTiles = tiles;
-                var neighbourCells = new List<Cell>();
-                GetOccupiedNeighbourTiles(cell, ref neighbourCells);
-
-                if (neighbourCells.Count > 0)
-                {
-                    allowedTiles = GetConnectingTiles(cell, neighbourCells);
-                }
+                var allowedTiles = GetConnectingTiles(cell);
 
                 if (allowedTiles.Length > 0)
                 {
@@ -133,26 +136,6 @@ public class WorldGenerator : MonoBehaviour
                 else
                 {
                     Debug.Log("No connecting tile found!");
-                }
-            }
-        }
-    }
-
-    private void GetOccupiedNeighbourTiles(Cell cell, ref List<Cell> neighbourCells)
-    {
-        int amountNeighbours = 0;
-        Cell neighbour;
-
-        for (int i = 0; i < cell.Neighbours.Length; i++)
-        {            
-            if (cell.Neighbours[i] >= 0)
-            {
-                neighbour = grid.GetCell(cell.Neighbours[i]);
-
-                if (neighbour.OccTileIndex >= 0)
-                {
-                    neighbourCells.Add(neighbour);
-                    amountNeighbours++;
                 }
             }
         }

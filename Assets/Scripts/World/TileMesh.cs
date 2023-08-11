@@ -54,8 +54,8 @@ public unsafe class TileMesh
         float3 q, r, v;
         int indexCount = (int)mesh.GetIndexCount(0);
 
-        var meshData = Mesh.AllocateWritableMeshData(1);
-        var data = meshData[0];
+        var dataArray = Mesh.AllocateWritableMeshData(1);
+        var data = dataArray[0];
 
         data.SetVertexBufferParams(mesh.vertexCount, VERTEX_ATTRIBUTES);
         data.SetIndexBufferParams(indexCount, INDEX_FORMAT);
@@ -92,7 +92,7 @@ public unsafe class TileMesh
             | MeshUpdateFlags.DontValidateIndices
             | MeshUpdateFlags.DontNotifyMeshUsers
             | MeshUpdateFlags.DontResetBoneBounds;
-        Mesh.ApplyAndDisposeWritableMeshData(meshData, meshFilter.mesh, flags);
+        Mesh.ApplyAndDisposeWritableMeshData(dataArray, meshFilter.mesh, flags);
 
         meshFilter.mesh.RecalculateNormals();
         meshFilter.mesh.RecalculateBounds();

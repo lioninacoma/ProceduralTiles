@@ -43,7 +43,7 @@ public class Grid
             edgeFaceLookup[i] = -1;
     }
     
-    public void Build(float radius = 3, int div = 3, int iter = 50, float relaxScl = .1f, int relaxType = 0)
+    public void Build(float radius = 3, int div = 3, int iter = 50, float relaxScl = .1f, int relaxType = 0, int seed = 123)
     {
         var triangles = new List<int>();
         BuildPoints(radius, div, ref vertices);
@@ -51,7 +51,7 @@ public class Grid
         halfedges.Update(triangles, ref halfedgesCount);
 
         triangles.Clear();
-        FaceSubdivide(ref triangles);
+        FaceSubdivide(ref triangles, seed);
 
         halfedges.ClearEdges(0, halfedgesCount);
         halfedgesCount = 0;
@@ -107,10 +107,17 @@ public class Grid
 
     private void BuildCells()
     {
-        int i, n;
+        int i, n, e, h;
         QuadEdge edge;
         Cell cell;
-        int[] neighbours, points;
+        int[] points;
+        var neighbourEdges = new int[16];
+        int amountNeighbourEdges;
+        List<int> neighbours;
+        HashSet<int>[] neighboursOfPoints;
+        Dictionary<int, int> indicesOfPoints;
+
+        var neighbourIndices = new Dictionary<int, int>();
 
         var edges = new QuadEdge[4];
         for (i = 0; i < 4; i++) edges[i] = new QuadEdge();
@@ -119,24 +126,44 @@ public class Grid
         {
             GetQuadEdges(f, edges);
             points = new int[4];
-            neighbours = new int[4] { -1, -1, -1, -1 };
+            neighboursOfPoints = new HashSet<int>[4] { new(), new(), new(), new() };
+            indicesOfPoints = new Dictionary<int, int>();
+            neighbours = new List<int>();
+            neighbourIndices.Clear();
 
             for (i = 0; i < 4; i++)
             {
                 edge = edges[i];
                 points[i] = edge.Point;
+                indicesOfPoints[edge.Point] = i;
 
                 if (edge.Halfedge >= 0)
                 {
-                    n = edgeFaceLookup[edge.Halfedge];
-                    if (n >= 0)
+                    amountNeighbourEdges = halfedges.GetEdgesAroundPoint(edge.Halfedge, ref neighbourEdges, neighbourEdges.Length);
+                    
+                    for (e = 0; e < amountNeighbourEdges; e++)
                     {
-                        neighbours[i] = (n - 2) / 6;
+                        h = neighbourEdges[e];
+                        n = edgeFaceLookup[h];
+
+                        if (n >= 0 && n != f)
+                        {
+                            if (!neighbourIndices.ContainsKey(n))
+                            {
+                                neighbourIndices[n] = neighbours.Count;
+                                neighboursOfPoints[i].Add(neighbours.Count);
+                                neighbours.Add((n - 2) / 6);
+                            }
+                            else
+                            {
+                                neighboursOfPoints[i].Add(neighbourIndices[n]);
+                            }
+                        }
                     }
                 }
             }
 
-            cell = new Cell((f - 2) / 6, points, neighbours);
+            cell = new Cell((f - 2) / 6, points, neighbours.ToArray(), neighboursOfPoints.Select(n => n.ToArray()).ToArray(), indicesOfPoints);
             cells[cell.Index] = cell;
             cellCount++;
         }
