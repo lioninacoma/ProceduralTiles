@@ -1,4 +1,5 @@
 using Extensions;
+using Palmmedia.ReportGenerator.Core.Parser.Analysis;
 using Priority_Queue;
 using System.Collections;
 using System.Collections.Generic;
@@ -185,8 +186,10 @@ public class WorldGenerator : MonoBehaviour
 
     public bool IsConnecting(CellTile t0, CellTile t1, int c0, int c1)
     {
-        int con0 = tiles[t0.Index].GetConnection(c0) + t0.Level;
-        int con1 = tiles[t1.Index].GetConnection(c1) + t1.Level;
+        var tile0 = tiles[t0.Index];
+        var tile1 = tiles[t1.Index];
+        int con0 = tile0.GetConnection(c0) + t0.Level;
+        int con1 = tile1.GetConnection(c1) + t1.Level;
         return con0 == con1;
     }
 
@@ -209,7 +212,8 @@ public class WorldGenerator : MonoBehaviour
             for (int j = 0; j < cell.NeighboursOfPoints[i].Length; j++)
             {
                 n = cell.NeighboursOfPoints[i][j];
-                neighbour = grid.GetCell(cell.Neighbours[n]);
+                int neighbourCellIndex = cell.Neighbours[n];
+                neighbour = grid.GetCell(neighbourCellIndex);
 
                 if (neighbour.CellTile != null)
                 {

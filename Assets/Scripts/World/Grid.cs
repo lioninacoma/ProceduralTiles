@@ -114,7 +114,7 @@ public class Grid
         Cell cell;
         int[] points;
         var neighbourEdges = new int[16];
-        int amountNeighbourEdges;
+        int neighbourCount;
         List<int> neighbours;
         HashSet<int>[] neighboursOfPoints;
         Dictionary<int, int> indicesOfPoints;
@@ -139,11 +139,11 @@ public class Grid
                 points[i] = edge.Point;
                 indicesOfPoints[edge.Point] = i;
 
-                if (edge.Halfedge >= 0)
+                if (edge.Edge >= 0)
                 {
-                    amountNeighbourEdges = halfedges.GetEdgesAroundPoint(edge.Halfedge, ref neighbourEdges, neighbourEdges.Length);
+                    neighbourCount = halfedges.GetEdgesAroundPoint(Halfedges.PrevHalfedge(edge.Edge), ref neighbourEdges, neighbourEdges.Length);
                     
-                    for (e = 0; e < amountNeighbourEdges; e++)
+                    for (e = 0; e < neighbourCount; e++)
                     {
                         h = neighbourEdges[e];
                         n = edgeFaceLookup[h];

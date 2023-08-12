@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class Halfedges
@@ -59,12 +60,33 @@ public class Halfedges
         int incoming = start;
         int outgoing;
         int i = 0;
+
         do
         {
             result[i++] = incoming;
             outgoing = NextHalfedge(incoming);
             incoming = GetHalfedge(outgoing);
         } while (incoming != -1 && incoming != start && i <= maxCount);
+        
+        if (incoming == -1)
+        {
+            // point lies on border, try other direction
+            incoming = PrevHalfedge(outgoing);
+            start = incoming;
+
+            do
+            {
+                if (!result.Take(i).Contains(incoming))
+                {
+                    result[i++] = incoming;
+                }
+
+                outgoing = GetHalfedge(incoming);
+                if (outgoing == -1) break;
+                incoming = PrevHalfedge(outgoing);
+            } while (incoming != start && i <= maxCount);
+        }
+
         if (i > maxCount) return 0;
         return i;
     }
