@@ -1,15 +1,8 @@
 using Extensions;
-using Palmmedia.ReportGenerator.Core.Parser.Analysis;
 using Priority_Queue;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
-using Unity.Mathematics;
-using UnityEditor.VersionControl;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 public class WorldGenerator : MonoBehaviour
 {
@@ -68,22 +61,27 @@ public class WorldGenerator : MonoBehaviour
     {
         var cells = grid.GetCells();
         var queue = new FastPriorityQueue<Cell>(cells.Count());
-        
-        foreach (var cell in cells)
-        {
-            queue.Enqueue(cell, 1f);
-        }
+        var closedSet = new HashSet<int>();
+        Cell current = PickRandomCell(cells);
 
-        Cell current;
+        closedSet.Add(current.Index);
+        queue.Enqueue(current, 1f);
 
         while (queue.Count > 0)
         {
             current = queue.Dequeue();
-            PlaceTile(current, queue);
+
+            if (PlaceTile(current))
+            {
+                // Updates allowed neighbour tiles,
+                // enqueues unvisited neighbours
+                // and updates neighbour priorities.
+                UpdatedNeighbourCells(current, queue, closedSet);
+            }
         }
     }
 
-    private void PlaceTile(Cell cell, FastPriorityQueue<Cell> queue = null)
+    private bool PlaceTile(Cell cell)
     {
         if (cell != null && cell.CellTile == null)
         {
@@ -93,8 +91,8 @@ public class WorldGenerator : MonoBehaviour
             if (randomTile != null)
             {
                 SpawnTileOnCell(cell, randomTile);
-                UpdatedNeighbourCells(cell, queue);
                 if (DEBUG_LOG) Debug.Log(tiles[cell.CellTile.Index].name + " spawned at tile level " + cell.CellTile.Level);
+                return true;
             }
             else
             {
@@ -105,9 +103,10 @@ public class WorldGenerator : MonoBehaviour
         {
             Debug.Log(cell == null ? "Cell is empty!" : "Cell tile is already set!");
         }
+        return false;
     }
 
-    private void UpdatedNeighbourCells(Cell cell, FastPriorityQueue<Cell> queue = null)
+    private void UpdatedNeighbourCells(Cell cell, FastPriorityQueue<Cell> queue = null, HashSet<int> closedSet = null)
     {
         Cell neighbour;
 
@@ -115,13 +114,23 @@ public class WorldGenerator : MonoBehaviour
         {
             neighbour = grid.GetCell(n);
 
-            if (neighbour.CellTile != null) 
+            if (neighbour.CellTile != null)
                 continue;
 
             UpdateAllowedTiles(neighbour);
 
-            if (queue != null)
-                queue.UpdatePriority(neighbour, CalcPriority(neighbour));
+            if (queue != null && closedSet != null)
+            {
+                if (closedSet.Contains(neighbour.Index))
+                {
+                    queue.UpdatePriority(neighbour, CalcPriority(neighbour));
+                }
+                else
+                {
+                    queue.Enqueue(neighbour, CalcPriority(neighbour));
+                    closedSet.Add(neighbour.Index);
+                }
+            }
         }
     }
 
@@ -129,6 +138,11 @@ public class WorldGenerator : MonoBehaviour
     {
         if (cell.AllowedTiles.Count() == 0) return null;
         return cell.AllowedTiles.RandomElementUsing(rng);
+    }
+
+    private Cell PickRandomCell(IEnumerable<Cell> cells)
+    {
+        return cells.RandomElementUsing(rng);
     }
 
     private float CalcPriority(Cell cell)
@@ -241,8 +255,13 @@ public class WorldGenerator : MonoBehaviour
             var camera = Camera.main;
             var mouseRay = camera.ScreenPointToRay(Input.mousePosition);
             var cell = grid.RaycastCell(mouseRay, transform);
+
+            if (PlaceTile(cell))
+            {
+                UpdatedNeighbourCells(cell);
+            }
+
             debugCell = cell;
-            PlaceTile(cell);
         }
     }
 

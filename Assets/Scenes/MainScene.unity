@@ -152,12 +152,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2f5349f59c2427c41b9e0c2d72b83aba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  radius: 32
-  div: 8
+  radius: 64
+  div: 16
   relaxIterations: 8
   relaxScale: 0.2
   relaxType: 0
-  tileLevels: 1
+  tileLevels: 2
   seed: 123
   tiles:
   - {fileID: 11400000, guid: c05e97ca7955ad24596794f034c0aadb, type: 2}
