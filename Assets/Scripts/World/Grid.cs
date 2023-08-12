@@ -95,6 +95,8 @@ public class Grid
         return cells[index];
     }
 
+    public IEnumerable<Cell> GetCells() { return cells.Take(cellCount); }
+
     private bool RayCellIntersection(float3 origin, float3 dir, Transform transform, Cell cell)
     {
         float3 a = transform.TransformPoint(vertices[cell.Points[0]]);

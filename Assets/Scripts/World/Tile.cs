@@ -10,8 +10,7 @@ public class Tile : ScriptableObject
 
     public Transform Asset;
 
-    /**
-     * 0: north-west
+    /* 0: north-west
      * 1: north-east
      * 2: south-east
      * 3: south-west
@@ -20,20 +19,11 @@ public class Tile : ScriptableObject
 
     [HideInInspector] public int TileIndex { get; set; }
 
-    private int GetConnection(int con)
+    public int GetConnection(int con)
     {
+        // Shifted by 2. Connector indices (determined by point index)
+        // start at south-eastern connector. Connector flags start
+        // at north-western cube corner.
         return ConnectorFlags[(2 + con) % CONNECTOR_COUNT];
-    }
-
-    public bool IsConnecting(Tile tile, int conSelf, int conOther)
-    {
-        int c0 = GetConnection(conSelf);
-        int c1 = tile.GetConnection(conOther);
-        return c0 == c1;
-    }
-
-    public IEnumerable<Tile> ConnectingTiles(IEnumerable<Tile> tileSet, int conSelf, int conOther)
-    {
-        return tileSet.Where(t => IsConnecting(t, conSelf, conOther));
     }
 }

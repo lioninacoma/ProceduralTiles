@@ -47,7 +47,7 @@ public unsafe class TileMesh
         }
     }
 
-    public void GetMesh(MeshFilter meshFilter, Cell cell, Grid grid)
+    public void GetMesh(MeshFilter meshFilter, Cell cell, Grid grid, float yOffset)
     {
         int i;
         Vector3 p;
@@ -77,7 +77,7 @@ public unsafe class TileMesh
             q = math.lerp(a, b, p.x * 0.5f + 0.5f);
             r = math.lerp(d, c, p.x * 0.5f + 0.5f);
             v = math.lerp(r, q, p.z * 0.5f + 0.5f);
-            vertexBufferPtr[i] = new Vector3(v.x, p.y, v.z);
+            vertexBufferPtr[i] = new Vector3(v.x, p.y + yOffset, v.z);
         }
 
         for (i = 0; i < indexCount; i++)
