@@ -12,5 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9a51b5b31c9a5c49a615bd6fbb18e33, type: 3}
   m_Name: 8_8Tile
   m_EditorClassIdentifier: 
-  Asset: {fileID: 4003924625361258248, guid: 2c67e760e758b65448394dbe253880ef, type: 3}
+  Asset: {fileID: 5661140075420879801, guid: 26b5e4f504a600c49b365b7ece205354, type: 3}
   ConnectorFlags: 01000000010000000100000001000000
+  SpawnChance: 10
+  BaseLevel: 0
+  SpawnProbability: 0.5

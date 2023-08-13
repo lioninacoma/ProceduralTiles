@@ -59,18 +59,18 @@ public class Halfedges
     {
         int incoming = start;
         int outgoing;
-        int i = 0;
+        int i = 0, j = 0;
 
         do
         {
             result[i++] = incoming;
             outgoing = NextHalfedge(incoming);
             incoming = GetHalfedge(outgoing);
-        } while (incoming != -1 && incoming != start && i <= maxCount);
+        } while (incoming != -1 && incoming != start && i < maxCount);
         
         if (incoming == -1)
-        {
             // point lies on border, try other direction
+        {
             incoming = PrevHalfedge(outgoing);
             start = incoming;
 
@@ -84,10 +84,10 @@ public class Halfedges
                 outgoing = GetHalfedge(incoming);
                 if (outgoing == -1) break;
                 incoming = PrevHalfedge(outgoing);
-            } while (incoming != start && i <= maxCount);
+            } while (incoming != start && i < maxCount && ++j < maxCount);
         }
 
-        if (i > maxCount) return 0;
+        if (i >= maxCount || j >= maxCount) return 0;
         return i;
     }
 

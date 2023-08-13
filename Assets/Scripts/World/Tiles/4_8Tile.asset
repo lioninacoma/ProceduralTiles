@@ -14,3 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Asset: {fileID: 6159593754555099786, guid: 5ff851a6bfba51348aba769d255dfa59, type: 3}
   ConnectorFlags: 00000000000000000000000000000000
+  SpawnChance: 10
+  BaseLevel: 0
+  SpawnProbability: 0.22222222

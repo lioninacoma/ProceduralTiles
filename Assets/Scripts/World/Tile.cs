@@ -17,13 +17,16 @@ public class Tile : ScriptableObject
      */
     [Range(0, 1)] public int[] ConnectorFlags;
 
+    [Range(1, 10)] public float SpawnChance;
+
+    [HideInInspector] public float SpawnProbability;
     [HideInInspector] public int TileIndex { get; set; }
 
-    public int GetConnection(int con)
+    public int GetConnection(int con, int rot)
     {
         // Shifted by 2. Connector indices (determined by point index)
         // start at south-eastern connector. Connector flags start
         // at north-western cube corner.
-        return ConnectorFlags[(2 + con) % CONNECTOR_COUNT];
+        return ConnectorFlags[(((2 + con) - rot) + CONNECTOR_COUNT) % CONNECTOR_COUNT];
     }
 }

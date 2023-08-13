@@ -47,7 +47,7 @@ public unsafe class TileMesh
         }
     }
 
-    public void GetMesh(MeshFilter meshFilter, Cell cell, Grid grid, float yOffset)
+    public void GetMesh(MeshFilter meshFilter, Cell cell, Grid grid, float yOffset, float yRotation)
     {
         int i;
         Vector3 p;
@@ -70,10 +70,12 @@ public unsafe class TileMesh
         var b = grid.GetVertex(cell.Points[1]);
         var c = grid.GetVertex(cell.Points[2]);
         var d = grid.GetVertex(cell.Points[3]);
+        var rot = (yRotation > 0f) ? Quaternion.Euler(0, yRotation, 0) : Quaternion.identity;
 
         for (i = 0; i < mesh.vertexCount; i++)
         {
             p = vertices[i];
+            if (yRotation > 0f) p = rot * p;
             q = math.lerp(a, b, p.x * 0.5f + 0.5f);
             r = math.lerp(d, c, p.x * 0.5f + 0.5f);
             v = math.lerp(r, q, p.z * 0.5f + 0.5f);

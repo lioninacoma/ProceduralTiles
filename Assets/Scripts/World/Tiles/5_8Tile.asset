@@ -10,8 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c9a51b5b31c9a5c49a615bd6fbb18e33, type: 3}
-  m_Name: 6_8Tile1
+  m_Name: 5_8Tile
   m_EditorClassIdentifier: 
-  Asset: {fileID: 7672921776530366668, guid: ea46bbabd571d234f93e61023b7c19bf, type: 3}
-  ConnectorFlags: 01000000010000000000000000000000
-  TileIndex: 6
+  Asset: {fileID: 2200502010892882328, guid: 25c94299c6e6ee045ad4373617ec0ff9, type: 3}
+  ConnectorFlags: 00000000010000000000000000000000
+  SpawnChance: 5
+  BaseLevel: 0
+  SpawnProbability: 0.11111111
