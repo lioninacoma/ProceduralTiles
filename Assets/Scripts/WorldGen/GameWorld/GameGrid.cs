@@ -6,8 +6,11 @@ using UnityEngine;
 
 public class GameGrid
 {
-    private static readonly int VERTEX_BUFFER_SIZE = 256000;
-    private static readonly int INDEX_BUFFER_SIZE = 256000;
+    private static readonly int VERTEX_SIZE = 3;
+    private static readonly int MAX_VERTICES = 48000;
+    private static readonly int MAX_INDICES = 64000;
+    private static readonly int VERTEX_BUFFER_SIZE = MAX_VERTICES * VERTEX_SIZE;
+    private static readonly int INDEX_BUFFER_SIZE = MAX_INDICES;
     private static readonly int CELL_XY_BUFFER_SIZE = 32000;
     private static readonly int HALFEDGES_BUFFER_SIZE = CELL_XY_BUFFER_SIZE * 6; // edge cell has 2 triangles with each 3 halfedges
 
@@ -16,30 +19,33 @@ public class GameGrid
     private int cellCountY;
     private float[] volume;
 
-    public GameGrid(float radius, int div, int seed)
+    public GameGrid(float radius, int height, int div, int seed)
     {
         baseGrid = new IrregularGrid(HALFEDGES_BUFFER_SIZE);
         baseGrid.Build(radius, div, 50, .2f, 0, seed);
 
         vertexCountXZ = baseGrid.GetVertexCount();
-        cellCountY = (int)Mathf.Ceil(radius);
+        cellCountY = height;
         volumeBufferSize = vertexCountXZ * (cellCountY + 1);
 
         volume = new float[volumeBufferSize];
         Array.Fill(volume, float.MaxValue);
+
+        //for (int p = 0; p < vertexCountXZ; p++)
+        //    for (int y = 0; y < cellCountY + 1; y++)
+        //    {
+        //        int index = GetVolumeIndex(p, y);
+        //        float3 v = baseGrid.GetVertex(p) + new float3(0, y, 0);
+        //        volume[index] = SdSphere(v - new float3(0, height * .5f, 0), height * .5f);
+        //    }
 
         for (int p = 0; p < vertexCountXZ; p++)
             for (int y = 0; y < cellCountY + 1; y++)
             {
                 int index = GetVolumeIndex(p, y);
                 float3 v = baseGrid.GetVertex(p) + new float3(0, y, 0);
-                volume[index] = SdSphere(v - new float3(0, radius * .5f, 0), radius * .5f);
+                volume[index] = SdPlane(v, 0f);
             }
-    }
-
-    public IrregularGrid GetBaseGrid()
-    {
-        return baseGrid;
     }
 
     private static float SdSphere(float3 p, float s)
@@ -47,19 +53,86 @@ public class GameGrid
         return math.length(p) - s;
     }
 
-    private static int FaceToCellIndex(int f)
+    private static float SdPlane(float3 p, float h)
     {
-        return (f - 2) / 6;
+        return p.y - h;
+    }
+
+    public int RaycastCell(Ray ray, Transform transform)
+    {
+        foreach (int f in baseGrid.GetFaceIndices())
+        {
+            if (RaycastCellIntersection(ray.origin, ray.direction, transform, f))
+            {
+                return f;
+            }
+        }
+
+        return -1;
+    }
+
+    private bool RaycastCellIntersection(float3 origin, float3 dir, Transform transform, int f)
+    {
+        int ae = Halfedges.NextHalfedge(f);
+        int be = Halfedges.NextHalfedge(ae);
+        int ce = Halfedges.NextHalfedge(baseGrid.GetHalfedge(f));
+        int de = Halfedges.NextHalfedge(ce);
+
+        int[] baseEdges = new int[] {
+            baseGrid.GetEdge(ae),
+            baseGrid.GetEdge(be),
+            baseGrid.GetEdge(ce),
+            baseGrid.GetEdge(de)
+        };
+
+        var a = baseGrid.GetVertex(baseEdges[0]);
+        var b = baseGrid.GetVertex(baseEdges[1]);
+        var c = baseGrid.GetVertex(baseEdges[2]);
+        var d = baseGrid.GetVertex(baseEdges[3]);
+
+        return Utils.RayTriangleIntersection(origin, dir, a, b, c, out _, out _, out _, out _)
+            || Utils.RayTriangleIntersection(origin, dir, c, d, a, out _, out _, out _, out _);
+    }
+
+    public void SetCellVolume(int f, int y, float v)
+    {
+        int a = Halfedges.NextHalfedge(f);
+        int b = Halfedges.NextHalfedge(a);
+        int c = Halfedges.NextHalfedge(baseGrid.GetHalfedge(f));
+        int d = Halfedges.NextHalfedge(c);
+
+        int[] baseEdges = new int[] {
+            baseGrid.GetEdge(a),
+            baseGrid.GetEdge(b),
+            baseGrid.GetEdge(c),
+            baseGrid.GetEdge(d)
+        };
+
+        int[] volumeIndices = new int[] {
+            GetVolumeIndex(baseEdges[1], y),
+            GetVolumeIndex(baseEdges[0], y),
+            GetVolumeIndex(baseEdges[0], y + 1),
+            GetVolumeIndex(baseEdges[1], y + 1),
+            GetVolumeIndex(baseEdges[2], y),
+            GetVolumeIndex(baseEdges[3], y),
+            GetVolumeIndex(baseEdges[3], y + 1),
+            GetVolumeIndex(baseEdges[2], y + 1)
+        };
+
+        for (int i = 0; i < 8; i++)
+        {
+            volume[volumeIndices[i]] = v;
+        }
+    }
+
+    public IrregularGrid GetBaseGrid()
+    {
+        return baseGrid;
     }
 
     private int GetVolumeIndex(int p, int y)
     {
         return p + y * vertexCountXZ;
-    }
-
-    private float GetVolume(int p, int y)
-    {
-        return volume[GetVolumeIndex(p, y)];
     }
 
     public void BuildMesh(Mesh mesh)
@@ -78,15 +151,18 @@ public class GameGrid
         
         if (counts[2] > 0)
         {
-            var indices = indexBuffer.Take(counts[1]).ToArray();
+            var indices = new int[counts[1]];
             var vertices = new Vector3[counts[2]];
+
+            for (int i = 0; i < counts[1]; i++)
+                indices[i] = indexBuffer[i];
 
             for (int i = 0; i < counts[2]; i++)
             {
                 vertices[i] = new Vector3(
-                    vertexBuffer[i * 3 + 0], 
-                    vertexBuffer[i * 3 + 1], 
-                    vertexBuffer[i * 3 + 2]);
+                    vertexBuffer[i * VERTEX_SIZE + 0], 
+                    vertexBuffer[i * VERTEX_SIZE + 1], 
+                    vertexBuffer[i * VERTEX_SIZE + 2]);
             }
 
             mesh.SetVertices(vertices);
@@ -96,18 +172,19 @@ public class GameGrid
         }
     }
 
-    private float3 GridCellLerp(float x, float y, float z, float yOffset, int[] baseEdges)
+    private unsafe float* GridCellLerp(float* vp, float yOffset, int[] baseEdges)
     {
         var a = baseGrid.GetVertex(baseEdges[0]);
         var b = baseGrid.GetVertex(baseEdges[1]);
         var c = baseGrid.GetVertex(baseEdges[2]);
         var d = baseGrid.GetVertex(baseEdges[3]);
 
-        float3 q = math.lerp(a, b, 1f - x);
-        float3 r = math.lerp(d, c, 1f - x);
-        float3 v = math.lerp(r, q, 1f - z);
+        float3 q = math.lerp(a, b, 1f - vp[0]);
+        float3 r = math.lerp(d, c, 1f - vp[0]);
+        float3 v = math.lerp(r, q, 1f - vp[2]);
 
-        return new float3(v.x, y + yOffset, v.z);
+        vp[0] = v.x; vp[1] = vp[1] + yOffset; vp[2] = v.z;
+        return vp;
     }
 
     private unsafe void BuildCell(int f, int y, int[] counts, int[] indexBuffer, float[] vertexBuffer)
@@ -132,7 +209,7 @@ public class GameGrid
             baseGrid.GetEdge(a),
             baseGrid.GetEdge(b),
             baseGrid.GetEdge(c),
-            baseGrid.GetEdge(d),
+            baseGrid.GetEdge(d)
         };
 
         int[] volumeIndices = new int[] { 
@@ -176,26 +253,26 @@ public class GameGrid
             p[1] = MarchingCubes.cubeVerts[e[0], 1];
             p[2] = MarchingCubes.cubeVerts[e[0], 2];
 
-            float at = grid[e[0]];
-            float bt = grid[e[1]];
-            float dt = at - bt;
-            float t = 0;
+            //float at = grid[e[0]];
+            //float bt = grid[e[1]];
+            //float dt = at - bt;
+            //float t = 0;
 
-            if (Mathf.Abs(dt) > 1e-6)
-                t = at / dt;
+            //if (Mathf.Abs(dt) > 1e-6)
+            //    t = at / dt;
 
-            //t = 0.5f;
+            float t = 0.5f;
 
             // vertex position
             vp[0] = p[0] + t * MarchingCubes.edgeDirection[i, 0];
             vp[1] = p[1] + t * MarchingCubes.edgeDirection[i, 1];
             vp[2] = p[2] + t * MarchingCubes.edgeDirection[i, 2];
 
-            float3 vpGrid = GridCellLerp(vp[0], vp[1], vp[2], y, baseEdges);
+            vp = GridCellLerp(vp, y, baseEdges);
 
-            vertexBuffer[counts[0]++] = vpGrid.x;
-            vertexBuffer[counts[0]++] = vpGrid.y;
-            vertexBuffer[counts[0]++] = vpGrid.z;
+            vertexBuffer[counts[0]++] = vp[0];
+            vertexBuffer[counts[0]++] = vp[1];
+            vertexBuffer[counts[0]++] = vp[2];
 
             // vertex normal
             //vertexBuffer[counts[0]++] = 0;
@@ -211,5 +288,51 @@ public class GameGrid
             indexBuffer[counts[1]++] = edges[MarchingCubes.triTable[cubeIndex, i + 1]];
             indexBuffer[counts[1]++] = edges[MarchingCubes.triTable[cubeIndex, i + 2]];
         }
+    }
+
+    private static readonly Color[] DEBUG_COLORS = new Color[]
+    {
+        Color.green,
+        Color.red,
+        Color.blue,
+        Color.yellow,
+        Color.magenta
+    };
+
+    public void DrawCell(int f, Transform transform)
+    {
+        int ae = Halfedges.NextHalfedge(f);
+        int be = Halfedges.NextHalfedge(ae);
+        int ce = Halfedges.NextHalfedge(baseGrid.GetHalfedge(f));
+        int de = Halfedges.NextHalfedge(ce);
+
+        int[] baseEdges = new int[] {
+            baseGrid.GetEdge(ae),
+            baseGrid.GetEdge(be),
+            baseGrid.GetEdge(ce),
+            baseGrid.GetEdge(de)
+        };
+
+        var a = baseGrid.GetVertex(baseEdges[0]);
+        var b = baseGrid.GetVertex(baseEdges[1]);
+        var c = baseGrid.GetVertex(baseEdges[2]);
+        var d = baseGrid.GetVertex(baseEdges[3]);
+
+        Gizmos.color = DEBUG_COLORS[0];
+        Gizmos.DrawLine(
+            transform.TransformPoint(a),
+            transform.TransformPoint(b));
+        Gizmos.color = DEBUG_COLORS[1];
+        Gizmos.DrawLine(
+            transform.TransformPoint(b),
+            transform.TransformPoint(c));
+        Gizmos.color = DEBUG_COLORS[2];
+        Gizmos.DrawLine(
+            transform.TransformPoint(c),
+            transform.TransformPoint(d));
+        Gizmos.color = DEBUG_COLORS[3];
+        Gizmos.DrawLine(
+            transform.TransformPoint(d),
+            transform.TransformPoint(a));
     }
 }
