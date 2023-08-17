@@ -6,7 +6,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public unsafe class TileMesh
+public unsafe class Tile2DMesh
 {
     private static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
@@ -21,7 +21,7 @@ public unsafe class TileMesh
     public NativeArray<ushort> indicesArray;
     public ushort* indices;
 
-    public void InitFromTile(Tile tile)
+    public void InitFromTile(Tile2D tile)
     {
         verticesArray = default;
         indicesArray = default;
@@ -47,7 +47,7 @@ public unsafe class TileMesh
         }
     }
 
-    public void GetMesh(MeshFilter meshFilter, Cell cell, Grid grid, float yOffset, float yRotation)
+    public void GetMesh(MeshFilter meshFilter, Cell2D cell, IrregularGrid grid, float yOffset, float yRotation)
     {
         int i;
         Vector3 p;
@@ -75,15 +75,23 @@ public unsafe class TileMesh
         for (i = 0; i < mesh.vertexCount; i++)
         {
             p = vertices[i];
-            if (yRotation > 0f) p = rot * p;
+
+            if (yRotation > 0f)
+            {
+                p = rot * p;
+            }
+
             q = math.lerp(a, b, p.x * 0.5f + 0.5f);
             r = math.lerp(d, c, p.x * 0.5f + 0.5f);
             v = math.lerp(r, q, p.z * 0.5f + 0.5f);
+
             vertexBufferPtr[i] = new Vector3(v.x, p.y + yOffset, v.z);
         }
 
         for (i = 0; i < indexCount; i++)
+        {
             indexBufferPtr[i] = indices[i];
+        }
 
         data.subMeshCount = 1;
         data.SetSubMesh(0, new SubMeshDescriptor(0, indexCount));

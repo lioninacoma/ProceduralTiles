@@ -10,10 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c9a51b5b31c9a5c49a615bd6fbb18e33, type: 3}
-  m_Name: 2_4Tile
+  m_Name: 3_4Tile
   m_EditorClassIdentifier: 
-  Asset: {fileID: 2141455975265641179, guid: d383d53c06f9a164ab6b6eeb87ce8855, type: 3}
-  ConnectorFlags: 01000000010000000000000000000000
+  Asset: {fileID: 2545525769562425238, guid: 589c6b8669d2be845890ea3b9beec39f, type: 3}
+  ConnectorFlags: 01000000010000000100000000000000
   SpawnChance: 10
-  BaseLevel: 1
-  SpawnProbability: 0.2
+  SpawnProbability: 0.25

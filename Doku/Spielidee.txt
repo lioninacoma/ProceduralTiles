@@ -1,0 +1,25 @@
+Handelsrouten über schwer erschließbare Pfade (Berge und Höhlen)
+Niedere Gefilde sind Giftnebel verseucht, Menschheit deshalb auf Berge geflüchtete.
+Verbindung zwischen Bergdörfern schaffen
+Karavanen managen und beschützen.
+Karavanen handeln entlang erschlossener Pfade.
+Konkurrenz (KI?) versucht ebenfalls Wege zu schaffen
+Jedes Dorf hat eine spezielle Ressource
+Ancient Handelsrouten entdecken und wieder erschließen. Durch Gegner beschützt.
+Wegelagerer oder andere Mobs versuchen dies zu verhindern. Clearen von Monstern entlang Weg.
+Einfachere und/oder schnellere Wege bedeuten stärkere Gegner
+Ancient Handelsrouten sehr schwere Gegner
+Ancient Pfade verseucht durch Giftnebel, der von Gegnern erzeugt wird. Muss “bereinigt” werden.
+Schnelles agiles Kampfsystem durch Nutzung von Brückenbau-Bewegungstechniken, Paraglider, Hook-Seil, Stabsprung, Kombis aus allen, plus Nah- und Fernkampf (Stabkampf (?))
+Bewegung in Thirdperson durch Klettereinlagen, Wegbefestigung und Brückenau, 3D Rope Physics zum Klettern und Befestigung von “Seil-Wegen”.
+Höhlen, Berge, Wälder und Felder über 3D Tiles und WFC Random Landschaftgenerierung.
+Stabsprung über Schluchten
+Stab platziert für Brückenbau
+Seitenwand Seile setzen beim Klettern
+Handlanger bauen Weg entlang Seil (adhoc durch Follower (?) oder automatisch beim Abschluss)
+Ressourcenbörse abhängig von Angebot des Rohstoffes (?)
+Deckenwand Seil wird zu hängende Brücke (?)
+Paraglider für das Setzen von Ziplines (?)
+Hookseil hochschießen wird zu Leiter (?)
+Magisch verlängerbarer Stab für Kampf und Bewegung (?)
+Upgrade max Stablänge, um über breitere Schluchten zu kommen

@@ -8,38 +8,30 @@ using Unity.Mathematics;
 // Based on irruglar grid https://sketchpunklabs.github.io/irregular_grid/
 // by Oskar Stålberg 
 
-public class Grid
+public class IrregularGrid
 {
-    private class QuadEdge
+    public class QuadEdge
     {
         public int Point { get; set; }
         public int Edge { get; set; }
         public int Halfedge { get; set; }
-        public float3 Vertex { get; set; }
     }
 
-    private static readonly int CELL_BUFFER_SIZE = 128000;
-    private static readonly int HALFEDGES_BUFFER_SIZE = CELL_BUFFER_SIZE * 4;
-
-    private Cell[] cells;
     private Halfedges halfedges;
     private int halfedgesCount;
     private List<float3> vertices;
     private List<int> faceEdges;
     private int[] edgeFaceLookup;
-    private int cellCount;
 
-    public Grid()
+    public IrregularGrid(int maxEdgeCount)
     {
-        cells = new Cell[CELL_BUFFER_SIZE];
-        halfedges = new Halfedges(HALFEDGES_BUFFER_SIZE);
-        edgeFaceLookup = new int[HALFEDGES_BUFFER_SIZE];
+        halfedges = new Halfedges(maxEdgeCount);
+        edgeFaceLookup = new int[maxEdgeCount];
         vertices = new List<float3>();
         faceEdges = new List<int>();
         halfedgesCount = 0;
-        cellCount = 0;
 
-        for (int i = 0; i < HALFEDGES_BUFFER_SIZE; i++)
+        for (int i = 0; i < maxEdgeCount; i++)
             edgeFaceLookup[i] = -1;
     }
     
@@ -57,8 +49,6 @@ public class Grid
         halfedgesCount = 0;
         halfedges.Update(triangles, ref halfedgesCount);
 
-        BuildCells();
-
         switch (relaxType)
         {
             case 0:
@@ -71,109 +61,49 @@ public class Grid
         }
     }
 
-    // TODO: ersetzen mit Quadtree search
-    public Cell RaycastCell(Ray ray, Transform transform)
-    {
-        Cell curr, cell = null;
-
-        for (int i = 0; i < cellCount; i++)
-        {
-            curr = cells[i];
-
-            if (curr != null && RayCellIntersection(ray.origin, ray.direction, transform, curr))
-            {
-                cell = curr; 
-                break;
-            }
-        }
-
-        return cell;
-    }
-
-    public Cell GetCell(int index)
-    {
-        return cells[index];
-    }
-
-    public IEnumerable<Cell> GetCells() { return cells.Take(cellCount); }
-
-    private bool RayCellIntersection(float3 origin, float3 dir, Transform transform, Cell cell)
-    {
-        float3 a = transform.TransformPoint(vertices[cell.Points[0]]);
-        float3 b = transform.TransformPoint(vertices[cell.Points[1]]);
-        float3 c = transform.TransformPoint(vertices[cell.Points[2]]);
-        float3 d = transform.TransformPoint(vertices[cell.Points[3]]);
-        return Utils.RayTriangleIntersection(origin, dir, a, b, c, out _, out _, out _, out _)
-            || Utils.RayTriangleIntersection(origin, dir, c, d, a, out _, out _, out _, out _);
-    }
-
-    private void BuildCells()
-    {
-        int i, n, e, h;
-        QuadEdge edge;
-        Cell cell;
-        int[] points;
-        var neighbourEdges = new int[16];
-        int neighbourCount;
-        List<int> neighbours;
-        HashSet<int>[] neighboursOfPoints;
-        Dictionary<int, int> indicesOfPoints;
-
-        var neighbourIndices = new Dictionary<int, int>();
-
-        var edges = new QuadEdge[4];
-        for (i = 0; i < 4; i++) edges[i] = new QuadEdge();
-
-        foreach (var f in faceEdges)
-        {
-            GetQuadEdges(f, edges);
-            points = new int[4];
-            neighboursOfPoints = new HashSet<int>[4] { new(), new(), new(), new() };
-            indicesOfPoints = new Dictionary<int, int>();
-            neighbours = new List<int>();
-            neighbourIndices.Clear();
-
-            for (i = 0; i < 4; i++)
-            {
-                edge = edges[i];
-                points[i] = edge.Point;
-                indicesOfPoints[edge.Point] = i;
-
-                if (edge.Edge >= 0)
-                {
-                    neighbourCount = halfedges.GetEdgesAroundPoint(Halfedges.PrevHalfedge(edge.Edge), ref neighbourEdges, neighbourEdges.Length);
-                    
-                    for (e = 0; e < neighbourCount; e++)
-                    {
-                        h = neighbourEdges[e];
-                        n = edgeFaceLookup[h];
-
-                        if (n >= 0 && n != f)
-                        {
-                            if (!neighbourIndices.ContainsKey(n))
-                            {
-                                neighbourIndices[n] = neighbours.Count;
-                                neighboursOfPoints[i].Add(neighbours.Count);
-                                neighbours.Add((n - 2) / 6);
-                            }
-                            else
-                            {
-                                neighboursOfPoints[i].Add(neighbourIndices[n]);
-                            }
-                        }
-                    }
-                }
-            }
-
-            cell = new Cell((f - 2) / 6, points, neighbours.ToArray(), neighboursOfPoints.Select(n => n.ToArray()).ToArray(), indicesOfPoints);
-            cells[cell.Index] = cell;
-            cellCount++;
-        }
-    }
-
     public float3 GetVertex(int index)
     {
         return vertices[index];
+    }
+
+    public List<int> GetFaceIndices()
+    {
+        return faceEdges;
+    }
+
+    public int GetFaceCount()
+    {
+        return faceEdges.Count;
+    }
+
+    public int GetEdgeCount()
+    {
+        return halfedgesCount;
+    }
+
+    public int GetVertexCount()
+    {
+        return vertices.Count;
+    }
+
+    public int GetEdge(int e)
+    {
+        return halfedges.GetEdge(e);
+    }
+
+    public int GetHalfedge(int e)
+    {
+        return halfedges.GetHalfedge(e);
+    }
+
+    public int GetFaceIndexOfEdge(int edge)
+    {
+        return edgeFaceLookup[edge];
+    }
+
+    public int GetNeighbourEdges(int edge, ref int[] neighbourEdges)
+    {
+        return halfedges.GetEdgesAroundPoint(edge, ref neighbourEdges, neighbourEdges.Length);
     }
 
     private void GetQuadVertices(int f, out float3 a, out float3 b, out float3 c, out float3 d)
@@ -192,7 +122,7 @@ public class Grid
         d = vertices[di];
     }
 
-    private void GetQuadEdges(int f, QuadEdge[] edges)
+    public void GetEdgesOfFaceIndex(int f, QuadEdge[] edges)
     {
         int ae = Halfedges.NextHalfedge(f);
         int be = Halfedges.NextHalfedge(ae);
@@ -209,10 +139,10 @@ public class Grid
         int ci = halfedges.GetEdge(ce);
         int di = halfedges.GetEdge(de);
 
-        edges[0].Point = ai; edges[0].Edge = ae; edges[0].Halfedge = ah; edges[0].Vertex = vertices[ai];
-        edges[1].Point = bi; edges[1].Edge = be; edges[1].Halfedge = bh; edges[1].Vertex = vertices[bi];
-        edges[2].Point = ci; edges[2].Edge = ce; edges[2].Halfedge = ch; edges[2].Vertex = vertices[ci];
-        edges[3].Point = di; edges[3].Edge = de; edges[3].Halfedge = dh; edges[3].Vertex = vertices[di];
+        edges[0].Point = ai; edges[0].Edge = ae; edges[0].Halfedge = ah;
+        edges[1].Point = bi; edges[1].Edge = be; edges[1].Halfedge = bh;
+        edges[2].Point = ci; edges[2].Edge = ce; edges[2].Halfedge = ch;
+        edges[3].Point = di; edges[3].Edge = de; edges[3].Halfedge = dh;
     }
 
     private void GetTriangleVertices(int t, out float3 a, out float3 b, out float3 c)
@@ -450,7 +380,7 @@ public class Grid
         float weight, w;
         float3 v, n, centroid, pos;
 
-        var neighbours = new int[10];
+        var neighbourEdges = new int[16];
         var isInnerVert = new bool[vertices.Count];
         var reprEdge = new int[vertices.Count];
         for (i = 0; i < isInnerVert.Length; i++)
@@ -475,8 +405,8 @@ public class Grid
                 if (!isInnerVert[i]) continue;
 
                 e = reprEdge[i];
-                neighbourCount = halfedges.GetEdgesAroundPoint(e, ref neighbours, neighbours.Length);
-                if (neighbourCount == 0 || neighbourCount == neighbours.Length) continue;
+                neighbourCount = GetNeighbourEdges(e, ref neighbourEdges);
+                if (neighbourCount == 0) continue;
 
                 centroid = float3.zero;
                 weight = 0;
@@ -484,7 +414,7 @@ public class Grid
 
                 for (j = 0; j < neighbourCount; j++)
                 {
-                    n = vertices[halfedges.GetEdge(neighbours[j])];
+                    n = vertices[halfedges.GetEdge(neighbourEdges[j])];
                     w = math.distance(v, n);
                     weight += w;
                     pos = n * w;
@@ -530,13 +460,13 @@ public class Grid
 
             foreach (int f in faceEdges)
             {
-                GetQuadEdges(f, edges);
+                GetEdgesOfFaceIndex(f, edges);
                 centroid = float3.zero;
 
                 for (i = 0; i < 4; i++)
                 {
                     edge = edges[i];
-                    centroid += edge.Vertex;
+                    centroid += vertices[edge.Point];
                 }
 
                 centroid /= 4f;
@@ -546,7 +476,7 @@ public class Grid
                     edge = edges[i];
                     if (isInnerVert[edge.Point])
                     {
-                        force += (edge.Vertex - centroid);
+                        force += (vertices[edge.Point] - centroid);
                         force = RotateY90(force);
                     }
                 }
@@ -558,7 +488,7 @@ public class Grid
                     edge = edges[i];
                     if (isInnerVert[edge.Point])
                     {
-                        forces[edge.Point] += ((centroid + force) - edge.Vertex);
+                        forces[edge.Point] += ((centroid + force) - vertices[edge.Point]);
                         force = RotateY90(force);
                     }
                 }
@@ -686,15 +616,6 @@ public class Grid
         }
     }
 
-    private static readonly Color[] DEBUG_COLORS = new Color[]
-    {
-        Color.green,
-        Color.red,
-        Color.blue,
-        Color.yellow,
-        Color.magenta
-    };
-
     private void DrawTriangle(int t, Transform transform)
     {
         GetTriangleVertices(t, out float3 a, out float3 b, out float3 c);
@@ -724,41 +645,6 @@ public class Grid
         Gizmos.DrawLine(
             transform.TransformPoint(d),
             transform.TransformPoint(a));
-    }
-
-    public void DrawCell(Cell cell, Transform transform)
-    {
-        var a = vertices[cell.Points[0]];
-        var b = vertices[cell.Points[1]];
-        var c = vertices[cell.Points[2]];
-        var d = vertices[cell.Points[3]];
-        Gizmos.color = DEBUG_COLORS[0];
-        Gizmos.DrawLine(
-            transform.TransformPoint(a),
-            transform.TransformPoint(b));
-        Gizmos.color = DEBUG_COLORS[1];
-        Gizmos.DrawLine(
-            transform.TransformPoint(b),
-            transform.TransformPoint(c));
-        Gizmos.color = DEBUG_COLORS[2];
-        Gizmos.DrawLine(
-            transform.TransformPoint(c),
-            transform.TransformPoint(d));
-        Gizmos.color = DEBUG_COLORS[3];
-        Gizmos.DrawLine(
-            transform.TransformPoint(d),
-            transform.TransformPoint(a));
-    }
-
-    public void DrawCellNeighbours(Cell cell, Transform transform)
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            if (cell.Neighbours[i] < 0) continue;
-            Gizmos.color = DEBUG_COLORS[i + 1];
-            var n = cells[cell.Neighbours[i]];
-            DrawCell(n, transform);
-        }
     }
 
     public void DrawTriangles(Transform transform)

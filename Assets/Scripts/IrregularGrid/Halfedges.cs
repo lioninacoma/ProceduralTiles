@@ -69,8 +69,9 @@ public class Halfedges
         } while (incoming != -1 && incoming != start && i < maxCount);
         
         if (incoming == -1)
-            // point lies on border, try other direction
-        {
+        { 
+            // Edge is located on the border of the grid, so no halfedge was found.
+            // Move backwards, to find remaining edges around the point.
             incoming = PrevHalfedge(outgoing);
             start = incoming;
 

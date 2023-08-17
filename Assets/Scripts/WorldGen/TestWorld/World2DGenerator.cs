@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class WorldGenerator : MonoBehaviour
+public class World2DGenerator : MonoBehaviour
 {
     private static readonly bool DEBUG_LOG = false;
+    private static readonly int CELL_BUFFER_SIZE = 32000;
+    private static readonly int HALFEDGES_BUFFER_SIZE = CELL_BUFFER_SIZE * 6;
 
     [Range(1f, 1000f)] public float radius = 3f;
     [Range(2, 80)] public int div = 3;
@@ -16,11 +18,11 @@ public class WorldGenerator : MonoBehaviour
     [Range(1, 10)] public int tileLevels = 1;
     public int seed = 123;
 
-    public Tile[] tiles;
+    public Tile2D[] tiles;
     public Material tileMaterial;
 
-    private Grid grid;
-    private TileMesh[] tileMeshes;
+    private Cell2DGrid grid;
+    private Tile2DMesh[] tileMeshes;
     private System.Random rng;
 
     void OnDisable()
@@ -34,8 +36,9 @@ public class WorldGenerator : MonoBehaviour
     {
         Random.InitState(seed);
         rng = new System.Random(seed);
-        grid = new Grid();
-        grid.Build(radius, div, relaxIterations, relaxScale, relaxType, seed);
+        var irregularGrid = new IrregularGrid(HALFEDGES_BUFFER_SIZE);
+        irregularGrid.Build(radius, div, relaxIterations, relaxScale, relaxType, seed);
+        grid = new Cell2DGrid(irregularGrid, CELL_BUFFER_SIZE);
     }
 
     // Start is called before the first frame update
@@ -47,12 +50,12 @@ public class WorldGenerator : MonoBehaviour
 
             float chanceTotal = 0f;
 
-            tileMeshes = new TileMesh[tiles.Length];
+            tileMeshes = new Tile2DMesh[tiles.Length];
             for (int i = 0; i < tileMeshes.Length; i++)
             {
                 tiles[i].TileIndex = i;
                 chanceTotal += tiles[i].SpawnChance;
-                tileMeshes[i] = new TileMesh();
+                tileMeshes[i] = new Tile2DMesh();
                 tileMeshes[i].InitFromTile(tiles[i]);
             }
 
@@ -61,16 +64,16 @@ public class WorldGenerator : MonoBehaviour
                 tiles[i].SpawnProbability = tiles[i].SpawnChance / (float)chanceTotal;
             }
 
-            GenerateTiles();
+            //GenerateTiles();
         }
     }
 
     private void GenerateTiles()
     {
         var cells = grid.GetCells();
-        var queue = new FastPriorityQueue<Cell>(cells.Count());
+        var queue = new FastPriorityQueue<Cell2D>(cells.Count());
         var closedSet = new HashSet<int>();
-        Cell current = PickRandomCell(cells);
+        Cell2D current = PickRandomCell(cells);
 
         closedSet.Add(current.Index);
         queue.Enqueue(current, 1f);
@@ -89,7 +92,7 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
-    private bool PlaceTile(Cell cell)
+    private bool PlaceTile(Cell2D cell)
     {
         if (cell != null && cell.CellTile == null)
         {
@@ -114,9 +117,9 @@ public class WorldGenerator : MonoBehaviour
         return false;
     }
 
-    private void UpdatedNeighbourCells(Cell cell, FastPriorityQueue<Cell> queue = null, HashSet<int> closedSet = null)
+    private void UpdatedNeighbourCells(Cell2D cell, FastPriorityQueue<Cell2D> queue = null, HashSet<int> closedSet = null)
     {
-        Cell neighbour;
+        Cell2D neighbour;
 
         foreach (var n in cell.Neighbours)
         {
@@ -142,13 +145,13 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
-    private CellTile PickRandomTile(Cell cell)
+    private Cell2DTile PickRandomTile(Cell2D cell)
     {
         if (cell.AllowedTiles.Count() == 0) return null;
         return cell.AllowedTiles.RandomElementUsing(rng);
     }
 
-    private CellTile WeightedPickRandomTile(Cell cell)
+    private Cell2DTile WeightedPickRandomTile(Cell2D cell)
     {
         if (cell.AllowedTiles.Count() == 0) 
             return null;
@@ -168,12 +171,12 @@ public class WorldGenerator : MonoBehaviour
         return cell.AllowedTiles.RandomElementUsing(rng);
     }
 
-    private Cell PickRandomCell(IEnumerable<Cell> cells)
+    private Cell2D PickRandomCell(IEnumerable<Cell2D> cells)
     {
         return cells.RandomElementUsing(rng);
     }
 
-    private float CalcPriority(Cell cell)
+    private float CalcPriority(Cell2D cell)
     {
         float priority = 1f;
 
@@ -186,7 +189,7 @@ public class WorldGenerator : MonoBehaviour
         return priority;
     }
 
-    private Cell debugCell;
+    private Cell2D debugCell;
 
     private GameObject CreateTile(string name)
     {
@@ -202,32 +205,32 @@ public class WorldGenerator : MonoBehaviour
         return tile;
     }
 
-    private void SpawnTileOnCell(Cell cell, CellTile tile)
+    private void SpawnTileOnCell(Cell2D cell, Cell2DTile tile)
     {
         var tileMesh = tileMeshes[tile.Index];
         var tileObject = CreateTile(tileMesh.tileName);
-        var tileInfo = tileObject.AddComponent<TileInfo>();
+        var tileInfo = tileObject.AddComponent<Tile2DInfo>();
         tileInfo.TileIndex = tile.Index;
         tileInfo.TileLevel = tile.Level;
         tileInfo.TileRotation = tile.Rotation;
         tileInfo.CellIndex = cell.Index;
         var meshFilter = tileObject.GetComponent<MeshFilter>();
-        tileMesh.GetMesh(meshFilter, cell, grid, tile.Level, tile.Rotation * 90f);
+        tileMesh.GetMesh(meshFilter, cell, grid.GetBaseGrid(), tile.Level, tile.Rotation * 90f);
         cell.CellTile = tile;
     }
 
-    private void InitAllowedTiles(Cell cell)
+    private void InitAllowedTiles(Cell2D cell)
     {
         if (cell.AllowedTiles == null)
         {
             cell.AllowedTiles = Enumerable.Range(0, 4) // y rotation indices
                 .SelectMany(r => Enumerable.Range(0, tileLevels) // y offset
                 .SelectMany(l => Enumerable.Range(0, tiles.Length) // tile index
-                .Select(i => new CellTile() { Index = i, Level = l, Rotation = r })));
+                .Select(i => new Cell2DTile() { Index = i, Level = l, Rotation = r })));
         }
     }
 
-    public bool IsConnecting(CellTile t0, CellTile t1, int c0, int c1)
+    public bool IsConnecting(Cell2DTile t0, Cell2DTile t1, int c0, int c1)
     {
         var tile0 = tiles[t0.Index];
         var tile1 = tiles[t1.Index];
@@ -236,14 +239,14 @@ public class WorldGenerator : MonoBehaviour
         return con0 == con1;
     }
 
-    public IEnumerable<CellTile> FilterTiles(IEnumerable<CellTile> tileSet, CellTile t0, int c0, int c1)
+    public IEnumerable<Cell2DTile> FilterTiles(IEnumerable<Cell2DTile> tileSet, Cell2DTile t0, int c0, int c1)
     {
         return tileSet.Where(t1 => IsConnecting(t0, t1, c0, c1));
     }
 
-    private void UpdateAllowedTiles(Cell cell)
+    private void UpdateAllowedTiles(Cell2D cell)
     {
-        Cell neighbour;
+        Cell2D neighbour;
         int point, conNeighbour, n;
 
         InitAllowedTiles(cell);
@@ -298,7 +301,7 @@ public class WorldGenerator : MonoBehaviour
     {
         if (grid != null)
         {
-            grid.DrawTriangles(transform);
+            grid.GetBaseGrid().DrawTriangles(transform);
         }
 
         if (debugCell != null)

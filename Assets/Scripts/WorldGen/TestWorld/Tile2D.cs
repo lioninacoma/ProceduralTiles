@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "World/Tile")]
-public class Tile : ScriptableObject
+[CreateAssetMenu(menuName = "World/Tile2D")]
+public class Tile2D : ScriptableObject
 {
     public static readonly int CONNECTOR_COUNT = 4;
 

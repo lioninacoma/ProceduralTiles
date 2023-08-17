@@ -12,8 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9a51b5b31c9a5c49a615bd6fbb18e33, type: 3}
   m_Name: 1_4Tile
   m_EditorClassIdentifier: 
-  Asset: {fileID: 5972776447105950849, guid: 6ee86b02964e5e9438f3962fb009a131, type: 3}
+  Asset: {fileID: 8558350894273830269, guid: b799dd76e6856c44e9687ba0f04f7271, type: 3}
   ConnectorFlags: 01000000000000000000000000000000
   SpawnChance: 10
-  BaseLevel: 1
-  SpawnProbability: 0.22222222
+  SpawnProbability: 0.25
