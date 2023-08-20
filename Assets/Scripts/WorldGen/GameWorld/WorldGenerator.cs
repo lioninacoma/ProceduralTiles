@@ -8,55 +8,92 @@ public class WorldGenerator : MonoBehaviour
 {
     [Range(1f, 1000f)] public float radius = 3f;
     [Range(2, 80)] public int div = 3;
-    [Range(1, 100)] public int height = 16;
+    [Range(1, 100)] public int cellCountY = 16;
+    [Range(0.1f, 4f)] public float cellHeightY = .5f;
     public int seed = 123;
-    public Material surfaceMaterial; 
+    public Material surfaceMaterial;
+    public Material buildingsMaterial;
+    public Tile[] tiles;
     public TMP_Text Text;
 
     private GameGrid grid;
-    private GameObject surface;
+    private GameObject surface, buildings;
+    private TileMesh[] tileMeshes;
+    private Dictionary<int, TilePermutation> tilePermutations;
     private int placeHeight;
 
     void Awake()
     {
-        grid = new GameGrid(radius, height, div, seed);
-        surface = CreateSurface();
-        surface.name = "Surface";
+        grid = new GameGrid(radius, cellCountY, cellHeightY, div, seed);
+        surface = CreateObject("Surface", surfaceMaterial);
+        buildings = CreateObject("Buildings", buildingsMaterial);
         debugCell = -1;
         placeHeight = 0;
     }
-
-    private GameObject CreateSurface()
+    void OnDisable()
     {
-        var surface = new GameObject(name);
-        surface.transform.SetParent(transform);
-
-        var meshFilter = surface.AddComponent<MeshFilter>();
-        meshFilter.mesh = new Mesh();
-
-        var meshRenderer = surface.AddComponent<MeshRenderer>();
-        meshRenderer.material = surfaceMaterial;
-
-        return surface;
+        if (tileMeshes != null)
+            for (int i = 0; i < tileMeshes.Length; i++)
+                tileMeshes[i].Dispose();
     }
 
-    // Start is called before the first frame update
+    private GameObject CreateObject(string name, Material material)
+    {
+        var obj = new GameObject(name);
+        obj.transform.SetParent(transform);
+
+        var meshFilter = obj.AddComponent<MeshFilter>();
+        meshFilter.mesh = new Mesh();
+
+        var meshRenderer = obj.AddComponent<MeshRenderer>();
+        meshRenderer.material = material;
+
+        return obj;
+    }
+
     void Start()
     {
+        tileMeshes = new TileMesh[tiles.Length]; 
+        tilePermutations = new Dictionary<int, TilePermutation>();
+
+        for (int i = 0; i < tileMeshes.Length; i++)
+        {
+            tiles[i].TileIndex = i;
+            tileMeshes[i] = new TileMesh();
+            tileMeshes[i].InitFromTile(tiles[i]);
+
+            for (int y = 0; y < 4; y++)
+            {
+                for (int m = 0; m < 2; m++)
+                {
+                    int cubeIndex = tiles[i].GetCubeIndex(y, m);
+
+                    if (!tilePermutations.ContainsKey(cubeIndex))
+                    {
+                        tilePermutations[cubeIndex] = new TilePermutation()
+                        {
+                            TileIndex = i,
+                            YRotation = y * 90f,
+                            YMirror = (m == 0) ? 1f : -1f
+                        };
+                    }
+                }
+            }
+        }
+
         var mesh = surface.GetComponent<MeshFilter>().sharedMesh;
-        grid.BuildMesh(mesh);
+        grid.BuildMesh(mesh, 0);
         Text.text = "Place height at: " + placeHeight;
     }
 
     private int debugCell;
 
-    // Update is called once per frame
     void Update()
     {
         if (Input.GetAxis("Mouse ScrollWheel") > 0f)
         {
             placeHeight++;
-            placeHeight = Mathf.Min(placeHeight, height);
+            placeHeight = Mathf.Min(placeHeight, cellCountY);
             Text.text = "Place height at: " + placeHeight;
         }
         else if (Input.GetAxis("Mouse ScrollWheel") < 0f)
@@ -74,10 +111,20 @@ public class WorldGenerator : MonoBehaviour
 
             if (cell >= 0)
             {
-                grid.SetCellVolume(cell, placeHeight, -1f);
-                var mesh = surface.GetComponent<MeshFilter>().sharedMesh;
-                mesh.Clear();
-                grid.BuildMesh(mesh);
+                grid.SetCellVolume(cell, placeHeight, -1f, 1);
+
+                {
+                    var mesh = surface.GetComponent<MeshFilter>().sharedMesh;
+                    mesh.Clear();
+                    grid.BuildMesh(mesh, 0);
+                }
+
+                {
+                    var mesh = buildings.GetComponent<MeshFilter>().sharedMesh;
+                    mesh.Clear();
+                    grid.BuildObjectMesh(mesh, 1, tileMeshes, tilePermutations);
+                }
+
                 debugCell = cell;
             }
         }
