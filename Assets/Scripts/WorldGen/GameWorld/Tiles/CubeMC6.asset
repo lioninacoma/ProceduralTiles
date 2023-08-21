@@ -12,5 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 978ab7a72fb729f4ba63be79c87088f8, type: 3}
   m_Name: CubeMC6
   m_EditorClassIdentifier: 
-  Asset: {fileID: 6271332448019962637, guid: 1742c0223f3e7ab4eb42753d7cac9bb2, type: 3}
-  ActiveCorners: 0000000000000000000000000100000001000000010000000100000001000000
+  Asset: {fileID: 6742083162535176856, guid: f5d3a9d867347ab4c8f6cf75786e619b, type: 3}
+  ActiveCorners: 0100000001000000010000000000000000000000000000000000000000000000
+  DefaultRotation: 0
+  DefaultMirror: 1
+  RotatePermutation: 1
+  MirrorPermutation: 1

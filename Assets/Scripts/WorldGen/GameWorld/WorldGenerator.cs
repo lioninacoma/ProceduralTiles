@@ -62,27 +62,38 @@ public class WorldGenerator : MonoBehaviour
             tileMeshes[i] = new TileMesh();
             tileMeshes[i].InitFromTile(tiles[i]);
 
-            for (int y = 0; y < 4; y++)
+            for (int y = 0; y < (tiles[i].RotatePermutation ? 4 : 1); y++)
             {
-                for (int m = 0; m < 2; m++)
+                int yRot = (tiles[i].DefaultRotation + y) % 4;
+
+                for (int m = 0; m < (tiles[i].MirrorPermutation ? 2 : 1); m++)
                 {
-                    int cubeIndex = tiles[i].GetCubeIndex(y, m);
+                    int yMir = (tiles[i].DefaultMirror + m) % 2;
+                    int cubeIndex = tiles[i].GetCubeIndex(yRot, yMir);
 
                     if (!tilePermutations.ContainsKey(cubeIndex))
                     {
                         tilePermutations[cubeIndex] = new TilePermutation()
                         {
                             TileIndex = i,
-                            YRotation = y * 90f,
-                            YMirror = (m == 0) ? 1f : -1f
+                            YRotation = yRot * 90f,
+                            YMirror = (yMir == 0) ? 1f : -1f
                         };
                     }
                 }
             }
         }
 
-        var mesh = surface.GetComponent<MeshFilter>().sharedMesh;
-        grid.BuildMesh(mesh, 0);
+        {
+            var mesh = surface.GetComponent<MeshFilter>().sharedMesh;
+            grid.BuildMesh(mesh, 0);
+        }
+
+        {
+            var mesh = buildings.GetComponent<MeshFilter>().sharedMesh;
+            grid.BuildObjectMesh(mesh, 1, tileMeshes, tilePermutations);
+        }
+
         Text.text = "Place height at: " + placeHeight;
     }
 

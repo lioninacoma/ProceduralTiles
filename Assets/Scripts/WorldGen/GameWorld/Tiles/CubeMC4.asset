@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Asset: {fileID: 6277469612819423952, guid: 82540363f6787d643ae1cc4dd4df78e6, type: 3}
   ActiveCorners: 0000000001000000000000000000000000000000000000000000000000000000
+  DefaultRotation: 0
+  DefaultMirror: 1
+  RotatePermutation: 1
+  MirrorPermutation: 1

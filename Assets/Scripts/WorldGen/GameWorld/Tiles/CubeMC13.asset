@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 978ab7a72fb729f4ba63be79c87088f8, type: 3}
-  m_Name: CubeMC3
+  m_Name: CubeMC13
   m_EditorClassIdentifier: 
-  Asset: {fileID: 4874497698595343762, guid: f916b58ba622d5c429d5fe2a1f0df98e, type: 3}
-  ActiveCorners: 0000000001000000010000000000000000000000000000000000000000000000
+  Asset: {fileID: 9210168847657814555, guid: 77d7fecf51cb1724993a6fa956a6afb3, type: 3}
+  ActiveCorners: 0100000000000000000000000000000001000000010000000000000000000000
   DefaultRotation: 0
-  DefaultMirror: 1
+  DefaultMirror: 0
   RotatePermutation: 1
-  MirrorPermutation: 1
+  MirrorPermutation: 0

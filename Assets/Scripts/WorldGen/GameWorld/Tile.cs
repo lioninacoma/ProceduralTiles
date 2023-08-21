@@ -9,6 +9,14 @@ public class Tile : ScriptableObject
 
     [Range(0, 1)] public int[] ActiveCorners = new int[8];
 
+    [Range(0, 1)] public int DefaultRotation = 0;
+
+    [Range(0, 1)] public int DefaultMirror = 0;
+
+    public bool RotatePermutation = true;
+
+    public bool MirrorPermutation = true;
+
     [HideInInspector] public int TileIndex { get; set; }
 
     private int GetCorner(int i, int yRot, int yMir)

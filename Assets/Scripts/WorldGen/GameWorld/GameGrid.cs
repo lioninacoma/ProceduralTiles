@@ -15,8 +15,8 @@ public class GameGrid
     private static readonly int INDEX_BUFFER_SIZE = MAX_INDICES;
     private static readonly int CELL_XY_BUFFER_SIZE = 32000;
     private static readonly int HALFEDGES_BUFFER_SIZE = CELL_XY_BUFFER_SIZE * 6; // edge cell has 2 triangles with each 3 halfedges
-    private static readonly bool LERP_POSITION = true;
-    private static readonly bool SMOOTH_SHADING = LERP_POSITION;
+    private static readonly bool DEFAULT_LERP_POSITION = true;
+    private static readonly bool SMOOTH_SHADING = DEFAULT_LERP_POSITION;
     private static readonly float DEFAULT_DENSITY_VALUE = float.MaxValue;
 
     private IrregularGrid baseGrid;
@@ -29,11 +29,13 @@ public class GameGrid
     {
         public float Density;
         public short Material;
+        public bool LerpPosition;
 
         public VolumeData()
         {
             Density = DEFAULT_DENSITY_VALUE;
             Material = 0;
+            LerpPosition = DEFAULT_LERP_POSITION;
         }
     }
 
@@ -46,7 +48,7 @@ public class GameGrid
     public GameGrid(float radius, int cellCountY, float cellHeightY, int div, int seed)
     {
         baseGrid = new IrregularGrid(HALFEDGES_BUFFER_SIZE);
-        baseGrid.Build(radius, div, 50, .2f, 0, seed);
+        baseGrid.Build(radius, div, 20, .22f, 0, seed);
 
         vertexCountXZ = baseGrid.GetVertexCount();
         this.cellCountY = cellCountY;
@@ -73,19 +75,50 @@ public class GameGrid
         //    {
         //        int index = GetVolumeIndex(p, y);
         //        float3 v = baseGrid.GetVertex(p) + new float3(0, y, 0);
-        //        volume[index] = fbm_4(v * 0.05f) * 100f;
+        //        volume[index].Density = GetDensity(v * 0.05f) * 100f;
         //    }
 
         for (int p = 0; p < vertexCountXZ; p++)
         {
             float3 v = baseGrid.GetVertex(p);
-            float d = GetDensity(v * 0.05f) * 10f + 5f;
-            
+            float d = GetDensity(v * 0.04f) * 10f + 5f;
             for (int y = 0; y < this.cellCountY + 1; y++)
             {
                 int index = GetVolumeIndex(p, y);
                 volume[index].Density = y - d;
             }
+        }
+
+        for (int y = 0; y < this.cellCountY; y++)
+        {
+            foreach (var f in baseGrid.GetFaceIndices())
+            {
+                int ae = Halfedges.NextHalfedge(f);
+                int be = Halfedges.NextHalfedge(ae);
+                int ce = Halfedges.NextHalfedge(baseGrid.GetHalfedge(f));
+                int de = Halfedges.NextHalfedge(ce);
+
+                int[] baseEdges = new int[] {
+                    baseGrid.GetEdge(ae),
+                    baseGrid.GetEdge(be),
+                    baseGrid.GetEdge(ce),
+                    baseGrid.GetEdge(de)
+                };
+
+                var a = baseGrid.GetVertex(baseEdges[0]);
+                var b = baseGrid.GetVertex(baseEdges[1]);
+                var c = baseGrid.GetVertex(baseEdges[2]);
+                var d = baseGrid.GetVertex(baseEdges[3]);
+                var p = (a + b + c + d) / 4f;
+
+                float3 v = p + new float3(0, y, 0);
+                float r = GetDensity(v * .24f) * .5f + .5f;
+
+                if (r < .28f)
+                {
+                    SetCellVolume(f, y, -1, 1);
+                }
+            }            
         }
     }
 
@@ -190,10 +223,10 @@ public class GameGrid
             baseGrid.GetEdge(de)
         };
 
-        var a = baseGrid.GetVertex(baseEdges[0]);
-        var b = baseGrid.GetVertex(baseEdges[1]);
-        var c = baseGrid.GetVertex(baseEdges[2]);
-        var d = baseGrid.GetVertex(baseEdges[3]);
+        var a = transform.TransformPoint(baseGrid.GetVertex(baseEdges[0]));
+        var b = transform.TransformPoint(baseGrid.GetVertex(baseEdges[1]));
+        var c = transform.TransformPoint(baseGrid.GetVertex(baseEdges[2]));
+        var d = transform.TransformPoint(baseGrid.GetVertex(baseEdges[3]));
 
         return Utils.RayTriangleIntersection(origin, dir, a, b, c, out _, out _, out _, out _)
             || Utils.RayTriangleIntersection(origin, dir, c, d, a, out _, out _, out _, out _);
@@ -224,27 +257,32 @@ public class GameGrid
             GetVolumeIndex(baseEdges[2], y + 1)
         };
 
-        for (int i = 0; i < 8; ++i)
+        int i;
+        float s;
+        int cubeIndex = 0;
+
+        for (i = 0; i < 8; ++i)
+        {
+            var data = volume[volumeIndices[i]];
+            s = data.Density;
+            cubeIndex |= (s > 0) ? (1 << i) : 0;
+        }
+
+        int edgeMask = MarchingCubes.edgeTable[cubeIndex];
+        if (edgeMask == 0 || edgeMask == 0xFF)
+            return;
+
+        for (i = 0; i < 8; ++i)
         {
             var data = volume[volumeIndices[i]];
 
-            /*if (data.Material != material)
+            //if (data.Density > 0)
             {
-                if (data.Density > 0)
-                {
-                    data.Density = v;
-                    data.Material = material;
-                    volume[volumeIndices[i]] = data;
-                }
-            }
-            else
-            {
+                data.LerpPosition = false;
                 data.Density = v;
+                data.Material = material;
                 volume[volumeIndices[i]] = data;
-            }*/
-            data.Density = v;
-            data.Material = material;
-            volume[volumeIndices[i]] = data;
+            }
         }
     }
 
@@ -353,7 +391,7 @@ public class GameGrid
             cubeIndex |= (s < 0) ? (1 << i) : 0;
         }
 
-        if (activeCornersMat >= 5 || (activeCornersMat >= 2 && activeCornersMat + activeCornersOther >= 8))
+        //if (activeCornersMat >= 2 || (activeCornersMat >= 1 && activeCornersMat + activeCornersOther >= 8))
         {
             if (tilePermutations.ContainsKey(cubeIndex))
             {
@@ -374,7 +412,7 @@ public class GameGrid
         {
             for (int y = 0; y < cellCountY; y++)
             {
-                BuildCell(f, y, counts, indexBuffer, vertexBuffer, material, LERP_POSITION);
+                BuildCell(f, y, counts, indexBuffer, vertexBuffer, material);
             }
         }
         
@@ -438,17 +476,19 @@ public class GameGrid
         return vp;
     }
 
-    private unsafe void BuildCell(int f, int y, int[] counts, int[] indexBuffer, float[] vertexBuffer, short material, bool lerpPosition = true)
+    private unsafe void BuildCell(int f, int y, int[] counts, int[] indexBuffer, float[] vertexBuffer, short material)
     {
         int i;
         float s;
 
         var e = stackalloc int[2];
+        var le = stackalloc bool[2];
         var v = stackalloc int[3];
         var p = stackalloc float[3];
         var vp = stackalloc float[3];
         var vn = stackalloc float[3];
         var grid = stackalloc float[8];
+        var lerp = stackalloc bool[8];
         var edges = stackalloc int[12];
 
         int a = Halfedges.NextHalfedge(f);
@@ -481,6 +521,7 @@ public class GameGrid
             var data = volume[volumeIndices[i]];
             s = (data.Material == material) ? data.Density : DEFAULT_DENSITY_VALUE;
             grid[i] = s;
+            lerp[i] = data.LerpPosition;
             cubeIndex |= (s > 0) ? (1 << i) : 0;
         }
 
@@ -500,6 +541,8 @@ public class GameGrid
 
             e[0] = MarchingCubes.edgeIndex[i, 0];
             e[1] = MarchingCubes.edgeIndex[i, 1];
+            le[0] = lerp[e[0]];
+            le[1] = lerp[e[1]];
 
             p[0] = MarchingCubes.cubeVerts[e[0], 0];
             p[1] = MarchingCubes.cubeVerts[e[0], 1];
@@ -507,7 +550,7 @@ public class GameGrid
 
             float t = 0.5f;
 
-            if (lerpPosition)
+            if (le[0] && le[1]) // lerp edge
             {
                 float at = grid[e[0]];
                 float bt = grid[e[1]];
