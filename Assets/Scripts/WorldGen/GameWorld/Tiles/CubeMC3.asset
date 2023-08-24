@@ -17,4 +17,4 @@ MonoBehaviour:
   DefaultRotation: 0
   DefaultMirror: 1
   RotatePermutation: 1
-  MirrorPermutation: 1
+  MirrorPermutation: 0

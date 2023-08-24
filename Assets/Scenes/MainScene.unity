@@ -359,70 +359,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!1 &700873156
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 700873158}
-  - component: {fileID: 700873157}
-  m_Layer: 0
-  m_Name: GameWorld
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &700873157
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 700873156}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 778291e148177d640a0a790213055e61, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  radius: 32
-  div: 24
-  cellCountY: 32
-  cellHeightY: 1
-  seed: 123
-  surfaceMaterial: {fileID: 2100000, guid: 34df7de259b2ec049b8847cb48ef0c1a, type: 2}
-  buildingsMaterial: {fileID: 2100000, guid: b2f4f646912fd564186ba6d6adcb9998, type: 2}
-  tiles:
-  - {fileID: 11400000, guid: 4167416ca5059ab46877e543656a2041, type: 2}
-  - {fileID: 11400000, guid: 4483abb66d8f40d4db54d772c96e932c, type: 2}
-  - {fileID: 11400000, guid: 28b381db2b7f5d44097983f0796b73ba, type: 2}
-  - {fileID: 11400000, guid: 5e9cfeda80b10d642859cb7457238c6f, type: 2}
-  - {fileID: 11400000, guid: 9f363ace595e5614b96d5f0b076c36f4, type: 2}
-  - {fileID: 11400000, guid: 33e32975fa0d598459eeb48af7de5c0c, type: 2}
-  - {fileID: 11400000, guid: df108859ca01ce3479efbd0cc3c08963, type: 2}
-  - {fileID: 11400000, guid: a579358e30559c7418a1d9a969b588c4, type: 2}
-  - {fileID: 11400000, guid: 005281882422c194f9b6559f588074b1, type: 2}
-  - {fileID: 11400000, guid: daa4ddd445611934d96b1d32d3480a8e, type: 2}
-  - {fileID: 11400000, guid: 025ae3ee784008140b48c8501f2bd541, type: 2}
-  Text: {fileID: 200139155}
---- !u!4 &700873158
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 700873156}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &821039194
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -484,6 +420,54 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 8e1004572745f4944b71220be2c10102, type: 3}
+--- !u!1 &882050368
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 882050370}
+  - component: {fileID: 882050369}
+  m_Layer: 0
+  m_Name: WorldChunk
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &882050369
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 882050368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78b8d2952edabdb4196f33d83fe8cfd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GridRadius: 32
+  GridCellDiv: 24
+  GridCellHeight: 0.5
+  ChunkSeed: 123
+--- !u!4 &882050370
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 882050368}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1444452605
 GameObject:
   m_ObjectHideFlags: 0
@@ -1622,9 +1606,9 @@ SceneRoots:
   m_Roots:
   - {fileID: 1542291997}
   - {fileID: 2140992961}
-  - {fileID: 700873158}
   - {fileID: 348870515}
   - {fileID: 1444452608}
+  - {fileID: 882050370}
   - {fileID: 2872005747612858519}
   - {fileID: 5091425307569810770}
   - {fileID: 2348488746953837821}

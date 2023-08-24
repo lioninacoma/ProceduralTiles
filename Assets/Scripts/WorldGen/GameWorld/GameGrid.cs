@@ -15,7 +15,7 @@ public class GameGrid
     private static readonly int INDEX_BUFFER_SIZE = MAX_INDICES;
     private static readonly int CELL_XY_BUFFER_SIZE = 32000;
     private static readonly int HALFEDGES_BUFFER_SIZE = CELL_XY_BUFFER_SIZE * 6; // edge cell has 2 triangles with each 3 halfedges
-    private static readonly bool DEFAULT_LERP_POSITION = true;
+    private static readonly bool DEFAULT_LERP_POSITION = false;
     private static readonly bool SMOOTH_SHADING = DEFAULT_LERP_POSITION;
     private static readonly float DEFAULT_DENSITY_VALUE = float.MaxValue;
 
@@ -275,10 +275,10 @@ public class GameGrid
         for (i = 0; i < 8; ++i)
         {
             var data = volume[volumeIndices[i]];
+            data.LerpPosition = false;
 
             //if (data.Density > 0)
             {
-                data.LerpPosition = false;
                 data.Density = v;
                 data.Material = material;
                 volume[volumeIndices[i]] = data;
