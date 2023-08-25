@@ -26,4 +26,9 @@ public class Utils
         t = math.dot(AO, N) * invdet;
         return (det >= 1e-6f && t >= 0f && u >= 0f && v >= 0f && (u + v) <= 1f);
     }
+
+    public static float ManhattanDistance(Vector3 a, Vector3 b)
+    {
+        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs(a.z - b.z);
+    }
 }

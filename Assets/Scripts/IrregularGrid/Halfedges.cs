@@ -55,6 +55,37 @@ public class Halfedges
         return GetHalfedge(EdgeOfTriangle(t, i));
     }
 
+    public List<int> GetTrianglePoints(int t)
+    {
+        var points = new List<int>();
+        int p;
+
+        foreach (int e in EdgesOfTriangle(t))
+        {
+            p = GetEdge(e);
+            points.Add(p);
+        }
+
+        return points;
+    }
+
+    public List<int> GetTriangleNeighbours(int t)
+    {
+        var neighbours = new List<int>();
+        int opposite;
+
+        foreach (int e in EdgesOfTriangle(t))
+        {
+            opposite = GetHalfedge(e);
+            if (opposite >= 0)
+            {
+                neighbours.Add(TriangleOfEdge(opposite));
+            }
+        }
+
+        return neighbours;
+    }
+
     public int GetEdgesAroundPoint(int start, ref int[] result, int maxCount = 16)
     {
         int incoming = start;

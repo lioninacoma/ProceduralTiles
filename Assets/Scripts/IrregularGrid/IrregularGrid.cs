@@ -17,37 +17,37 @@ public class IrregularGrid
         public int Halfedge { get; set; }
     }
 
-    private Halfedges halfedges;
-    private int halfedgesCount;
-    private List<float3> vertices;
-    private List<int> faceEdges;
-    private int[] edgeFaceLookup;
+    private Halfedges Halfedges;
+    private int HalfedgesCount;
+    private List<float3> Vertices;
+    private List<int> FaceEdges;
+    private int[] EdgeFaceLookup;
 
     public IrregularGrid(int maxEdgeCount)
     {
-        halfedges = new Halfedges(maxEdgeCount);
-        edgeFaceLookup = new int[maxEdgeCount];
-        vertices = new List<float3>();
-        faceEdges = new List<int>();
-        halfedgesCount = 0;
+        Halfedges = new Halfedges(maxEdgeCount);
+        EdgeFaceLookup = new int[maxEdgeCount];
+        Vertices = new List<float3>();
+        FaceEdges = new List<int>();
+        HalfedgesCount = 0;
 
         for (int i = 0; i < maxEdgeCount; i++)
-            edgeFaceLookup[i] = -1;
+            EdgeFaceLookup[i] = -1;
     }
     
     public void Build(float radius = 3, int div = 3, int iter = 50, float relaxScl = .1f, int relaxType = 0, int seed = 123)
     {
         var triangles = new List<int>();
-        BuildPoints(radius, div, ref vertices);
+        BuildPoints(radius, div, ref Vertices);
         BuildTriangles(div, ref triangles);
-        halfedges.Update(triangles, ref halfedgesCount);
+        Halfedges.Update(triangles, ref HalfedgesCount);
 
         triangles.Clear();
         FaceSubdivide(ref triangles, seed);
 
-        halfedges.ClearEdges(0, halfedgesCount);
-        halfedgesCount = 0;
-        halfedges.Update(triangles, ref halfedgesCount);
+        Halfedges.ClearEdges(0, HalfedgesCount);
+        HalfedgesCount = 0;
+        Halfedges.Update(triangles, ref HalfedgesCount);
 
         switch (relaxType)
         {
@@ -63,81 +63,81 @@ public class IrregularGrid
 
     public float3 GetVertex(int index)
     {
-        return vertices[index];
+        return Vertices[index];
     }
 
     public List<int> GetFaceIndices()
     {
-        return faceEdges;
+        return FaceEdges;
     }
 
     public int GetFaceCount()
     {
-        return faceEdges.Count;
+        return FaceEdges.Count;
     }
 
     public int GetEdgeCount()
     {
-        return halfedgesCount;
+        return HalfedgesCount;
     }
 
     public int GetVertexCount()
     {
-        return vertices.Count;
+        return Vertices.Count;
     }
 
     public int GetEdge(int e)
     {
-        return halfedges.GetEdge(e);
+        return Halfedges.GetEdge(e);
     }
 
     public int GetHalfedge(int e)
     {
-        return halfedges.GetHalfedge(e);
+        return Halfedges.GetHalfedge(e);
     }
 
     public int GetFaceIndexOfEdge(int edge)
     {
-        return edgeFaceLookup[edge];
+        return EdgeFaceLookup[edge];
     }
 
     public int GetNeighbourEdges(int edge, ref int[] neighbourEdges)
     {
-        return halfedges.GetEdgesAroundPoint(edge, ref neighbourEdges, neighbourEdges.Length);
+        return Halfedges.GetEdgesAroundPoint(edge, ref neighbourEdges, neighbourEdges.Length);
     }
 
     private void GetQuadVertices(int f, out float3 a, out float3 b, out float3 c, out float3 d)
     {
         int t0 = Halfedges.TriangleOfEdge(f);
-        int t1 = Halfedges.TriangleOfEdge(halfedges.GetHalfedge(f));
+        int t1 = Halfedges.TriangleOfEdge(Halfedges.GetHalfedge(f));
 
-        int ai = halfedges.GetEdgeOfTriangle(t0, 0);
-        int bi = halfedges.GetEdgeOfTriangle(t0, 1);
-        int ci = halfedges.GetEdgeOfTriangle(t0, 2);
-        int di = halfedges.GetEdgeOfTriangle(t1, 1);
+        int ai = Halfedges.GetEdgeOfTriangle(t0, 0);
+        int bi = Halfedges.GetEdgeOfTriangle(t0, 1);
+        int ci = Halfedges.GetEdgeOfTriangle(t0, 2);
+        int di = Halfedges.GetEdgeOfTriangle(t1, 1);
 
-        a = vertices[ai];
-        b = vertices[bi];
-        c = vertices[ci];
-        d = vertices[di];
+        a = Vertices[ai];
+        b = Vertices[bi];
+        c = Vertices[ci];
+        d = Vertices[di];
     }
 
     public void GetEdgesOfFaceIndex(int f, QuadEdge[] edges)
     {
         int ae = Halfedges.NextHalfedge(f);
         int be = Halfedges.NextHalfedge(ae);
-        int ce = Halfedges.NextHalfedge(halfedges.GetHalfedge(f));
+        int ce = Halfedges.NextHalfedge(Halfedges.GetHalfedge(f));
         int de = Halfedges.NextHalfedge(ce);
 
-        int ah = halfedges.GetHalfedge(ae);
-        int bh = halfedges.GetHalfedge(be);
-        int ch = halfedges.GetHalfedge(ce);
-        int dh = halfedges.GetHalfedge(de);
+        int ah = Halfedges.GetHalfedge(ae);
+        int bh = Halfedges.GetHalfedge(be);
+        int ch = Halfedges.GetHalfedge(ce);
+        int dh = Halfedges.GetHalfedge(de);
 
-        int ai = halfedges.GetEdge(ae);
-        int bi = halfedges.GetEdge(be);
-        int ci = halfedges.GetEdge(ce);
-        int di = halfedges.GetEdge(de);
+        int ai = Halfedges.GetEdge(ae);
+        int bi = Halfedges.GetEdge(be);
+        int ci = Halfedges.GetEdge(ce);
+        int di = Halfedges.GetEdge(de);
 
         edges[0].Point = ai; edges[0].Edge = ae; edges[0].Halfedge = ah;
         edges[1].Point = bi; edges[1].Edge = be; edges[1].Halfedge = bh;
@@ -147,12 +147,12 @@ public class IrregularGrid
 
     private void GetTriangleVertices(int t, out float3 a, out float3 b, out float3 c)
     {
-        int ai = halfedges.GetEdgeOfTriangle(t, 0);
-        int bi = halfedges.GetEdgeOfTriangle(t, 1);
-        int ci = halfedges.GetEdgeOfTriangle(t, 2);
-        a = vertices[ai];
-        b = vertices[bi];
-        c = vertices[ci];
+        int ai = Halfedges.GetEdgeOfTriangle(t, 0);
+        int bi = Halfedges.GetEdgeOfTriangle(t, 1);
+        int ci = Halfedges.GetEdgeOfTriangle(t, 2);
+        a = Vertices[ai];
+        b = Vertices[bi];
+        c = Vertices[ci];
     }
 
     private void FaceSubdivide(ref List<int> triangles, int seed = 123)
@@ -162,10 +162,10 @@ public class IrregularGrid
         int he, t1;
         bool quadFound;
 
-        var midpoints = new int[halfedgesCount];
-        var midpointExists = new bool[halfedgesCount];
-        var triProcessed = new bool[halfedgesCount / 3];
-        var triangleIndices = Enumerable.Range(0, halfedgesCount / 3);
+        var midpoints = new int[HalfedgesCount];
+        var midpointExists = new bool[HalfedgesCount];
+        var triProcessed = new bool[HalfedgesCount / 3];
+        var triangleIndices = Enumerable.Range(0, HalfedgesCount / 3);
         var edgeIndices = Enumerable.Range(0, 3);
 
         foreach (int t0 in triangleIndices.OrderBy(a => rng.Next()))
@@ -177,7 +177,7 @@ public class IrregularGrid
 
             foreach (int i in edgeIndices.OrderBy(a => rng.Next()))
             {
-                he = halfedges.GetHalfedgeOfTriangle(t0, i);
+                he = Halfedges.GetHalfedgeOfTriangle(t0, i);
                 if (he >= 0)
                 {
                     t1 = Halfedges.TriangleOfEdge(he);
@@ -205,17 +205,17 @@ public class IrregularGrid
         be = Halfedges.EdgeOfTriangle(t, 1);
         ce = Halfedges.EdgeOfTriangle(t, 2);
 
-        ah = halfedges.GetHalfedgeOfTriangle(t, 0);
-        bh = halfedges.GetHalfedgeOfTriangle(t, 1);
-        ch = halfedges.GetHalfedgeOfTriangle(t, 2);
+        ah = Halfedges.GetHalfedgeOfTriangle(t, 0);
+        bh = Halfedges.GetHalfedgeOfTriangle(t, 1);
+        ch = Halfedges.GetHalfedgeOfTriangle(t, 2);
 
-        ai = halfedges.GetEdge(ae);
-        bi = halfedges.GetEdge(be);
-        ci = halfedges.GetEdge(ce);
+        ai = Halfedges.GetEdge(ae);
+        bi = Halfedges.GetEdge(be);
+        ci = Halfedges.GetEdge(ce);
 
-        a = vertices[ai];
-        b = vertices[bi];
-        c = vertices[ci];
+        a = Vertices[ai];
+        b = Vertices[bi];
+        c = Vertices[ci];
 
         if (ah >= 0 && midpointExists[ah])
         {
@@ -224,8 +224,8 @@ public class IrregularGrid
         else
         {
             v = math.lerp(a, b, 0.5f);
-            ab = vertices.Count;
-            vertices.Add(v);
+            ab = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[ae] = true;
             midpoints[ae] = ab;
         }
@@ -237,8 +237,8 @@ public class IrregularGrid
         else
         {
             v = math.lerp(b, c, 0.5f);
-            bc = vertices.Count;
-            vertices.Add(v);
+            bc = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[be] = true;
             midpoints[be] = bc;
         }
@@ -250,15 +250,15 @@ public class IrregularGrid
         else
         {
             v = math.lerp(c, a, 0.5f);
-            ca = vertices.Count;
-            vertices.Add(v);
+            ca = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[ce] = true;
             midpoints[ce] = ca;
         }
 
         v = (a + b + c) / 3f;
-        cp = vertices.Count;
-        vertices.Add(v);
+        cp = Vertices.Count;
+        Vertices.Add(v);
 
         AddQuadFace(cp, ca, ai, ab, ref triangles);
         AddQuadFace(cp, ab, bi, bc, ref triangles);
@@ -272,23 +272,23 @@ public class IrregularGrid
 
         ae = Halfedges.NextHalfedge(s);
         be = Halfedges.NextHalfedge(ae);
-        ce = Halfedges.NextHalfedge(halfedges.GetHalfedge(s));
+        ce = Halfedges.NextHalfedge(Halfedges.GetHalfedge(s));
         de = Halfedges.NextHalfedge(ce);
 
-        ah = halfedges.GetHalfedge(ae);
-        bh = halfedges.GetHalfedge(be);
-        ch = halfedges.GetHalfedge(ce);
-        dh = halfedges.GetHalfedge(de);
+        ah = Halfedges.GetHalfedge(ae);
+        bh = Halfedges.GetHalfedge(be);
+        ch = Halfedges.GetHalfedge(ce);
+        dh = Halfedges.GetHalfedge(de);
 
-        ai = halfedges.GetEdge(ae);
-        bi = halfedges.GetEdge(be);
-        ci = halfedges.GetEdge(ce);
-        di = halfedges.GetEdge(de);
+        ai = Halfedges.GetEdge(ae);
+        bi = Halfedges.GetEdge(be);
+        ci = Halfedges.GetEdge(ce);
+        di = Halfedges.GetEdge(de);
 
-        a = vertices[ai];
-        b = vertices[bi];
-        c = vertices[ci];
-        d = vertices[di];
+        a = Vertices[ai];
+        b = Vertices[bi];
+        c = Vertices[ci];
+        d = Vertices[di];
 
         if (ah >= 0 && midpointExists[ah])
         {
@@ -297,8 +297,8 @@ public class IrregularGrid
         else
         {
             v = math.lerp(a, b, 0.5f);
-            ab = vertices.Count;
-            vertices.Add(v);
+            ab = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[ae] = true;
             midpoints[ae] = ab;
         }
@@ -310,8 +310,8 @@ public class IrregularGrid
         else
         {
             v = math.lerp(b, c, 0.5f);
-            bc = vertices.Count;
-            vertices.Add(v);
+            bc = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[be] = true;
             midpoints[be] = bc;
         }
@@ -323,8 +323,8 @@ public class IrregularGrid
         else
         {
             v = math.lerp(c, d, 0.5f);
-            cd = vertices.Count;
-            vertices.Add(v);
+            cd = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[ce] = true;
             midpoints[ce] = cd;
         }
@@ -336,15 +336,15 @@ public class IrregularGrid
         else
         {
             v = math.lerp(d, a, 0.5f);
-            da = vertices.Count;
-            vertices.Add(v);
+            da = Vertices.Count;
+            Vertices.Add(v);
             midpointExists[de] = true;
             midpoints[de] = da;
         }
 
         v = (a + b + c + d) / 4f;
-        cp = vertices.Count;
-        vertices.Add(v);
+        cp = Vertices.Count;
+        Vertices.Add(v);
 
         AddQuadFace(ai, ab, cp, da, ref triangles);
         AddQuadFace(ab, bi, bc, cp, ref triangles);
@@ -360,9 +360,9 @@ public class IrregularGrid
         triangles.Add(a); triangles.Add(b); triangles.Add(c);
         triangles.Add(c); triangles.Add(d); triangles.Add(a);
 
-        faceEdges.Add(faceEdge);
+        FaceEdges.Add(faceEdge);
         for (int i = 0; i < 6; i++)
-            edgeFaceLookup[startEdge + i] = faceEdge;
+            EdgeFaceLookup[startEdge + i] = faceEdge;
     }
 
     private float3 RotateY90(float3 v)
@@ -381,18 +381,18 @@ public class IrregularGrid
         float3 v, n, centroid, pos;
 
         var neighbourEdges = new int[16];
-        var isInnerVert = new bool[vertices.Count];
-        var reprEdge = new int[vertices.Count];
+        var isInnerVert = new bool[Vertices.Count];
+        var reprEdge = new int[Vertices.Count];
         for (i = 0; i < isInnerVert.Length; i++)
             isInnerVert[i] = true;
 
-        for (t = 0; t < halfedgesCount / 3; t++)
+        for (t = 0; t < HalfedgesCount / 3; t++)
         {
             for (i = 0; i < 3; i++)
             {
                 e = Halfedges.EdgeOfTriangle(t, i);
-                p = halfedges.GetEdge(e);
-                he = halfedges.GetHalfedge(e);
+                p = Halfedges.GetEdge(e);
+                he = Halfedges.GetHalfedge(e);
                 isInnerVert[p] &= he >= 0;
                 reprEdge[p] = he;
             }
@@ -400,7 +400,7 @@ public class IrregularGrid
 
         for (int loop = 0; loop < iter; loop++)
         {
-            for (i = 0; i < vertices.Count; i++)
+            for (i = 0; i < Vertices.Count; i++)
             {
                 if (!isInnerVert[i]) continue;
 
@@ -410,11 +410,11 @@ public class IrregularGrid
 
                 centroid = float3.zero;
                 weight = 0;
-                v = vertices[i];
+                v = Vertices[i];
 
                 for (j = 0; j < neighbourCount; j++)
                 {
-                    n = vertices[halfedges.GetEdge(neighbourEdges[j])];
+                    n = Vertices[Halfedges.GetEdge(neighbourEdges[j])];
                     w = math.distance(v, n);
                     weight += w;
                     pos = n * w;
@@ -422,7 +422,7 @@ public class IrregularGrid
                 }
 
                 centroid /= weight;
-                vertices[i] = centroid;
+                Vertices[i] = centroid;
             }
         }
     }
@@ -436,18 +436,18 @@ public class IrregularGrid
         var edges = new QuadEdge[4];
         for (i = 0; i < 4; i++) edges[i] = new QuadEdge();
 
-        var forces = new float3[vertices.Count];
-        var isInnerVert = new bool[vertices.Count];
+        var forces = new float3[Vertices.Count];
+        var isInnerVert = new bool[Vertices.Count];
         for (i = 0; i < isInnerVert.Length; i++)
             isInnerVert[i] = true;
 
-        for (t = 0; t < halfedgesCount / 3; t++)
+        for (t = 0; t < HalfedgesCount / 3; t++)
         {
             for (i = 0; i < 3; i++)
             {
                 e = Halfedges.EdgeOfTriangle(t, i);
-                p = halfedges.GetEdge(e);
-                he = halfedges.GetHalfedge(e);
+                p = Halfedges.GetEdge(e);
+                he = Halfedges.GetHalfedge(e);
                 isInnerVert[p] &= he >= 0;
             }
         }
@@ -458,7 +458,7 @@ public class IrregularGrid
             for (i = 0; i < forces.Length; i++)
                 forces[i] = float3.zero;
 
-            foreach (int f in faceEdges)
+            foreach (int f in FaceEdges)
             {
                 GetEdgesOfFaceIndex(f, edges);
                 centroid = float3.zero;
@@ -466,7 +466,7 @@ public class IrregularGrid
                 for (i = 0; i < 4; i++)
                 {
                     edge = edges[i];
-                    centroid += vertices[edge.Point];
+                    centroid += Vertices[edge.Point];
                 }
 
                 centroid /= 4f;
@@ -476,7 +476,7 @@ public class IrregularGrid
                     edge = edges[i];
                     if (isInnerVert[edge.Point])
                     {
-                        force += (vertices[edge.Point] - centroid);
+                        force += (Vertices[edge.Point] - centroid);
                         force = RotateY90(force);
                     }
                 }
@@ -488,7 +488,7 @@ public class IrregularGrid
                     edge = edges[i];
                     if (isInnerVert[edge.Point])
                     {
-                        forces[edge.Point] += ((centroid + force) - vertices[edge.Point]);
+                        forces[edge.Point] += ((centroid + force) - Vertices[edge.Point]);
                         force = RotateY90(force);
                     }
                 }
@@ -498,7 +498,7 @@ public class IrregularGrid
             {
                 if (isInnerVert[i])
                 {
-                    vertices[i] += (forces[i] * relaxScl);
+                    Vertices[i] += (forces[i] * relaxScl);
                 }
             }
         }
@@ -649,14 +649,8 @@ public class IrregularGrid
 
     public void DrawTriangles(Transform transform)
     {
-        //Gizmos.color = Color.gray;
-        //for (int t = 0; t < halfedgesCount / 3; t++)
-        //{
-        //    DrawTriangle(t, transform);
-        //}
 
-        Gizmos.color = Color.black;
-        foreach (int f in faceEdges)
+        foreach (int f in FaceEdges)
         {
             DrawQuad(f, transform);
         }

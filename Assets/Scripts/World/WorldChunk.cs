@@ -17,6 +17,7 @@ public class WorldChunk : MonoBehaviour
     private float FlattenHeight;
     private ChunkSurface Surface;
     private IrregularGrid Grid;
+    private Pathfinder Pathfinder;
 
     private void Awake()
     {
@@ -25,11 +26,15 @@ public class WorldChunk : MonoBehaviour
         Grid = new IrregularGrid(HALFEDGES_BUFFER_SIZE);
         Grid.Build(GridRadius, GridCellDiv, GRID_RELAX_ITERATIONS, GRID_RELAX_SCALE, 0, ChunkSeed);
         FlattenHeight = 0f;
+        Pathfinder = new Pathfinder(100000);
     }
 
     private void Start()
     {
         Surface.Build(Grid, GridCellHeight);
+        Pathfinder.UpdateGrid(Surface.GetComponent<MeshFilter>().sharedMesh);
+        StartIndex = -1;
+        GoalIndex = StartIndex;
     }
 
     void Update()
@@ -51,16 +56,49 @@ public class WorldChunk : MonoBehaviour
         {
             var camera = Camera.main;
             var mouseRay = camera.ScreenPointToRay(Input.mousePosition);
-            Surface.Flatten(mouseRay, FlattenHeight);
-            Surface.UpdateMesh();
+
+            /*Surface.Flatten(mouseRay, FlattenHeight);
+            Surface.UpdateMesh();*/
+
+            var collider = Surface.GetComponent<MeshCollider>();
+
+            if (collider.Raycast(mouseRay, out RaycastHit hitInfo, 10000))
+            {
+                 
+                if (StartIndex < 0) StartIndex = hitInfo.triangleIndex;
+                else if (GoalIndex < 0) GoalIndex = hitInfo.triangleIndex;
+
+                if (StartIndex >= 0 && GoalIndex >= 0)
+                {
+                    DebugPath = Pathfinder.FindPath(StartIndex, GoalIndex);
+                    StartIndex = GoalIndex;
+                    GoalIndex = -1;
+                }
+            }
         }
     }
 
+    private int StartIndex, GoalIndex;
+    private List<int> DebugPath;
+
     private void OnDrawGizmos()
     {
-        if (Grid != null)
+        /*if (Grid != null)
         {
+            Gizmos.color = Color.black;
             Grid.DrawTriangles(transform);
+        }*/
+
+        if (Pathfinder != null)
+        {
+            Gizmos.color = Color.gray;
+            Pathfinder.DrawGrid();
+
+            if (DebugPath != null && DebugPath.Count > 0)
+            {
+                Gizmos.color = Color.red;
+                Pathfinder.DrawPath(DebugPath);
+            }
         }
     }
 

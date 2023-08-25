@@ -9,13 +9,13 @@ using UnityEngine;
 public class ChunkSurface : MonoBehaviour
 {
     private static readonly int VERTEX_SIZE = 3;
-    private static readonly int MAX_VERTICES = 100000;
-    private static readonly int MAX_INDICES = 100000;
+    private static readonly int MAX_VERTICES = 65536;
+    private static readonly int MAX_INDICES = MAX_VERTICES * 6;
     private static readonly int VERTEX_BUFFER_SIZE = MAX_VERTICES * VERTEX_SIZE;
     private static readonly int INDEX_BUFFER_SIZE = MAX_INDICES;
     private static readonly float DEFAULT_DENSITY_VALUE = float.MaxValue;
 
-    public int ChunkHeight = 32; // in grid cells
+    public int ChunkHeight = 18; // in grid cells
 
     private MeshFilter SurfaceMeshFilter;
     private MeshRenderer SurfaceMeshRenderer;
@@ -194,16 +194,24 @@ public class ChunkSurface : MonoBehaviour
 
     private void BuildVolume()
     {
+        //for (int p = 0; p < GridVertexCount; p++)
+        //{
+        //    float3 v = Grid.GetVertex(p);
+        //    float d = Noise.FBM_4(v * 0.04f) * 10f + 5f;
+        //    for (int y = 0; y < ChunkHeight + 1; y++)
+        //    {
+        //        int index = GetVolumeIndex(p, y);
+        //        SurfaceVolume[index] = y - d;
+        //    }
+        //}
+
         for (int p = 0; p < GridVertexCount; p++)
-        {
-            float3 v = Grid.GetVertex(p);
-            float d = Noise.FBM_4(v * 0.04f) * 10f + 5f;
             for (int y = 0; y < ChunkHeight + 1; y++)
             {
                 int index = GetVolumeIndex(p, y);
-                SurfaceVolume[index] = y - d;
+                float3 v = Grid.GetVertex(p) + new float3(0, y, 0);
+                SurfaceVolume[index] = Noise.FBM_4(v * 0.05f) * 100f;
             }
-        }
     }
 
     public void UpdateMesh()
