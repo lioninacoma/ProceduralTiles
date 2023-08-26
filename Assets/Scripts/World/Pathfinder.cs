@@ -28,6 +28,13 @@ public class Pathfinder
         Vertices = new List<Vector3>();
     }
 
+    public void Clear()
+    {
+        HalfedgesCount = 0;
+        EdgeLookup.Clear();
+        Vertices.Clear();
+    }
+
     public int UpdateGrid(Mesh mesh)
     {
         return UpdateGrid(mesh.vertices, mesh.GetIndices(0));

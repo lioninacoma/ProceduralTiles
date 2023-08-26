@@ -57,14 +57,46 @@ public class WorldChunk : MonoBehaviour
             var camera = Camera.main;
             var mouseRay = camera.ScreenPointToRay(Input.mousePosition);
 
-            /*Surface.Flatten(mouseRay, FlattenHeight);
-            Surface.UpdateMesh();*/
+            var stopwatchTotal = new System.Diagnostics.Stopwatch();
+            stopwatchTotal.Start();
 
+            {
+                var stopwatchMesh = new System.Diagnostics.Stopwatch();
+                stopwatchMesh.Start();
+
+                Surface.Flatten(mouseRay, FlattenHeight);
+                Surface.UpdateMesh();
+
+                stopwatchMesh.Stop();
+                var elapsedTimeMesh = stopwatchMesh.ElapsedMilliseconds;
+                Debug.Log("Update mesh time: " + elapsedTimeMesh + "ms");
+            }
+
+            {
+                var stopwatchGrid = new System.Diagnostics.Stopwatch();
+                stopwatchGrid.Start();
+
+                Pathfinder.Clear();
+                Pathfinder.UpdateGrid(Surface.GetComponent<MeshFilter>().sharedMesh);
+
+                stopwatchGrid.Stop();
+                var elapsedTimeGrid = stopwatchGrid.ElapsedMilliseconds;
+                Debug.Log("Update grid time: " + elapsedTimeGrid + "ms");
+            }
+
+            stopwatchTotal.Stop();
+            var elapsedTimeTotal = stopwatchTotal.ElapsedMilliseconds;
+            Debug.Log("Total time: " + elapsedTimeTotal + "ms");
+        }
+
+        if (Input.GetMouseButtonUp(1))
+        {
+            var camera = Camera.main;
+            var mouseRay = camera.ScreenPointToRay(Input.mousePosition);
             var collider = Surface.GetComponent<MeshCollider>();
 
             if (collider.Raycast(mouseRay, out RaycastHit hitInfo, 10000))
             {
-                 
                 if (StartIndex < 0) StartIndex = hitInfo.triangleIndex;
                 else if (GoalIndex < 0) GoalIndex = hitInfo.triangleIndex;
 
@@ -83,16 +115,16 @@ public class WorldChunk : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        /*if (Grid != null)
+        if (Grid != null)
         {
             Gizmos.color = Color.black;
             Grid.DrawTriangles(transform);
-        }*/
+        }
 
         if (Pathfinder != null)
         {
-            Gizmos.color = Color.gray;
-            Pathfinder.DrawGrid();
+            //Gizmos.color = Color.gray;
+            //Pathfinder.DrawGrid();
 
             if (DebugPath != null && DebugPath.Count > 0)
             {

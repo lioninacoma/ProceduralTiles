@@ -1,13 +1,22 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshCollider))]
 [RequireComponent(typeof(MeshRenderer))]
-public class ChunkSurface : MonoBehaviour
+public unsafe class ChunkSurface : MonoBehaviour
 {
+    private static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
+        new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
+    };
+
+    private static readonly IndexFormat INDEX_FORMAT = IndexFormat.UInt32;
     private static readonly int VERTEX_SIZE = 3;
     private static readonly int MAX_VERTICES = 65536;
     private static readonly int MAX_INDICES = MAX_VERTICES * 6;
@@ -25,6 +34,10 @@ public class ChunkSurface : MonoBehaviour
     private int GridVertexCount;
     private float GridCellHeight;
     private float[] SurfaceVolume;
+    NativeArray<float> TempVerticesArray;
+    NativeArray<int> TempIndicesArray;
+    private float* TempVertices;
+    private int* TempIndices;
 
     private void Awake()
     {
@@ -46,6 +59,17 @@ public class ChunkSurface : MonoBehaviour
         }
 
         SurfaceMeshCollider = GetComponent<MeshCollider>();
+
+        TempVerticesArray = new NativeArray<float>(VERTEX_BUFFER_SIZE, Allocator.Persistent);
+        TempIndicesArray = new NativeArray<int>(INDEX_BUFFER_SIZE, Allocator.Persistent);
+        TempVertices = (float*)NativeArrayUnsafeUtility.GetUnsafePtr(TempVerticesArray);
+        TempIndices = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(TempIndicesArray);
+    }
+
+    private void OnDisable()
+    {
+        TempVerticesArray.Dispose();
+        TempIndicesArray.Dispose();
     }
 
     public void Build(IrregularGrid grid, float gridCellHeight)
@@ -194,61 +218,78 @@ public class ChunkSurface : MonoBehaviour
 
     private void BuildVolume()
     {
-        //for (int p = 0; p < GridVertexCount; p++)
-        //{
-        //    float3 v = Grid.GetVertex(p);
-        //    float d = Noise.FBM_4(v * 0.04f) * 10f + 5f;
-        //    for (int y = 0; y < ChunkHeight + 1; y++)
-        //    {
-        //        int index = GetVolumeIndex(p, y);
-        //        SurfaceVolume[index] = y - d;
-        //    }
-        //}
-
         for (int p = 0; p < GridVertexCount; p++)
+        {
+            float3 v = Grid.GetVertex(p);
+            float d = Noise.FBM_4(v * 0.04f) * 10f + 5f;
             for (int y = 0; y < ChunkHeight + 1; y++)
             {
                 int index = GetVolumeIndex(p, y);
-                float3 v = Grid.GetVertex(p) + new float3(0, y, 0);
-                SurfaceVolume[index] = Noise.FBM_4(v * 0.05f) * 100f;
+                SurfaceVolume[index] = y - d;
             }
+        }
+
+        //for (int p = 0; p < GridVertexCount; p++)
+        //    for (int y = 0; y < ChunkHeight + 1; y++)
+        //    {
+        //        int index = GetVolumeIndex(p, y);
+        //        float3 v = Grid.GetVertex(p) + new float3(0, y, 0);
+        //        SurfaceVolume[index] = Noise.FBM_4(v * 0.05f) * 100f;
+        //    }
     }
 
-    public void UpdateMesh()
+    public unsafe void UpdateMesh()
     {
-        float[] vertexBuffer = new float[VERTEX_BUFFER_SIZE];
-        int[] indexBuffer = new int[INDEX_BUFFER_SIZE];
-        int[] counts = new int[3];
+        var counts = stackalloc int[3];
+        var edgeIndices = new Dictionary<ulong, int>();
 
         foreach (int f in Grid.GetFaceIndices())
         {
             for (int y = 0; y < ChunkHeight; y++)
             {
-                BuildCell(f, y, counts, indexBuffer, vertexBuffer);
+                BuildCell(f, y, counts, TempIndices, TempVertices, edgeIndices);
             }
         }
 
         if (counts[2] > 0)
         {
-            var indices = new int[counts[1]];
-            var vertices = new Vector3[counts[2]];
+            var dataArray = Mesh.AllocateWritableMeshData(1);
+            var data = dataArray[0];
+
+            data.SetVertexBufferParams(counts[2], VERTEX_ATTRIBUTES);
+            data.SetIndexBufferParams(counts[1], INDEX_FORMAT);
+
+            var vertices = data.GetVertexData<Vector3>();
+            var indices = data.GetIndexData<int>();
+            var verticesPtr = (Vector3*)NativeArrayUnsafeUtility.GetUnsafePtr(vertices);
+            var indicesPtr = (int*)NativeArrayUnsafeUtility.GetUnsafePtr(indices);
 
             for (int i = 0; i < counts[2]; i++)
             {
-                vertices[i] = new Vector3(
-                    vertexBuffer[i * VERTEX_SIZE + 0],
-                    vertexBuffer[i * VERTEX_SIZE + 1],
-                    vertexBuffer[i * VERTEX_SIZE + 2]);
+                verticesPtr[i] = new Vector3(
+                    TempVertices[i * VERTEX_SIZE + 0],
+                    TempVertices[i * VERTEX_SIZE + 1],
+                    TempVertices[i * VERTEX_SIZE + 2]);
             }
 
             for (int i = 0; i < counts[1]; i++)
             {
-                indices[i] = indexBuffer[i];
+                indicesPtr[i] = TempIndices[i];
             }
 
             SurfaceMesh.Clear();
-            SurfaceMesh.SetVertices(vertices);
-            SurfaceMesh.SetIndices(indices, MeshTopology.Triangles, 0);
+
+            data.subMeshCount = 1;
+            data.SetSubMesh(0, new SubMeshDescriptor(0, counts[1]));
+
+            // apply mesh data
+            var flags =
+                  MeshUpdateFlags.DontRecalculateBounds
+                | MeshUpdateFlags.DontValidateIndices
+                | MeshUpdateFlags.DontNotifyMeshUsers
+                | MeshUpdateFlags.DontResetBoneBounds;
+            Mesh.ApplyAndDisposeWritableMeshData(dataArray, SurfaceMesh, flags);
+
             SurfaceMesh.RecalculateNormals();
             SurfaceMesh.RecalculateBounds();
             SurfaceMeshCollider.sharedMesh = SurfaceMesh;
@@ -270,7 +311,7 @@ public class ChunkSurface : MonoBehaviour
         return vp;
     }
 
-    private unsafe void BuildCell(int f, int y, int[] counts, int[] indexBuffer, float[] vertexBuffer)
+    private unsafe void BuildCell(int f, int y, int* counts, int* indexBuffer, float* vertexBuffer, Dictionary<ulong, int> edgeIndices)
     {
         int i;
         float s;
@@ -281,7 +322,9 @@ public class ChunkSurface : MonoBehaviour
         var vp = stackalloc float[3];
         var vn = stackalloc float[3];
         var grid = stackalloc float[8];
+        var vi = stackalloc int[8];
         var edges = stackalloc int[12];
+        ulong edgeHash0, edgeHash1;
 
         int a = Halfedges.NextHalfedge(f);
         int b = Halfedges.NextHalfedge(a);
@@ -310,6 +353,7 @@ public class ChunkSurface : MonoBehaviour
 
         for (i = 0; i < 8; ++i)
         {
+            vi[i] = volumeIndices[i];
             s = SurfaceVolume[volumeIndices[i]];
             grid[i] = s;
             cubeIndex |= (s > 0) ? (1 << i) : 0;
@@ -327,10 +371,24 @@ public class ChunkSurface : MonoBehaviour
                 continue;
             }
 
-            edges[i] = counts[2];
-
             e[0] = MarchingCubes.edgeIndex[i, 0];
             e[1] = MarchingCubes.edgeIndex[i, 1];
+
+            int p0 = vi[e[0]];
+            int p1 = vi[e[1]];
+
+            edgeHash0 = Halfedges.GetEdgeHash(p0, p1);
+            edgeHash1 = Halfedges.GetEdgeHash(p1, p0);
+
+            if (edgeIndices.TryGetValue(edgeHash1, out edges[i]) ||
+                edgeIndices.TryGetValue(edgeHash0, out edges[i]))
+            {
+                continue;
+            }
+
+            edgeIndices[edgeHash0] = counts[2];
+
+            edges[i] = counts[2];
 
             p[0] = MarchingCubes.cubeVerts[e[0], 0];
             p[1] = MarchingCubes.cubeVerts[e[0], 1];

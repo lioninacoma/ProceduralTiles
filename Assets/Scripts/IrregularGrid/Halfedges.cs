@@ -192,7 +192,7 @@ public class Halfedges
 
     public void Update(List<int> indices, ref int offset, Dictionary<ulong, int> edgeLookup = null, int start = 0, int count = -1)
     {
-        int t, ip, iq, tp, tq;
+        int t, ip, iq, tp, tq, qp;
         int ep, eq;
 
         ulong hedge;
@@ -216,9 +216,9 @@ public class Halfedges
                 eq = GetEdge(tq);
 
                 hedge = GetEdgeHash(eq, ep); // halfedge hash p <- q
-                if (edgeLookup.ContainsKey(hedge))
+                if (edgeLookup.TryGetValue(hedge, out qp))
                 {
-                    ConnectHalfedges(edgeLookup[hedge], tp);
+                    ConnectHalfedges(qp, tp);
                 }
 
                 hedge = GetEdgeHash(ep, eq); // halfedge hash p -> q
