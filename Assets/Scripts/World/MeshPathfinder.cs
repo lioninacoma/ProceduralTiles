@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class Pathfinder
+public class MeshPathfinder
 {
+    private static readonly int MAX_PATH_SIZE = 10000;
+
     private class TriangleNode : FastPriorityQueueNode
     {
         public int t;
@@ -20,7 +22,7 @@ public class Pathfinder
     private Dictionary<ulong, int> EdgeLookup;
     private List<Vector3> Vertices;
 
-    public Pathfinder(int maxEdgeCount)
+    public MeshPathfinder(int maxEdgeCount)
     {
         Halfedges = new Halfedges(maxEdgeCount);
         HalfedgesCount = 0;
@@ -69,7 +71,7 @@ public class Pathfinder
 
     private float GetCost(int ta, int tb, Vector3 a, Vector3 b)
     {
-        return Heuristics(a, b);
+        return Mathf.Abs(a.y - b.y) * 1000f;
     }
 
     private float Heuristics(Vector3 a, Vector3 b)
@@ -81,10 +83,12 @@ public class Pathfinder
     {
         if (start == goal) return;
 
-        var frontier = new FastPriorityQueue<TriangleNode>(10000);
-        var cameFrom = new Dictionary<int, TriangleNode>();
-        var costSoFar = new Dictionary<int, float>();
-        float newCost, currentCost, priority;
+        var frontier = new FastPriorityQueue<TriangleNode>(MAX_PATH_SIZE);
+        var cameFrom = new TriangleNode[HalfedgesCount / 3];
+        var costSoFar = new float[HalfedgesCount / 3];
+        System.Array.Fill(costSoFar, float.MaxValue);
+
+        float newCost, currentCost, priority, costNext;
         bool pathFound = false;
         TriangleNode current;
         Vector3 currentPoint, nextPoint;
@@ -110,8 +114,9 @@ public class Pathfinder
             {
                 nextPoint = GetTriangleCenter(next);
                 newCost = currentCost + GetCost(current.t, next, currentPoint, nextPoint);
+                costNext = costSoFar[next];
 
-                if (!costSoFar.ContainsKey(next) || newCost < costSoFar[next])
+                if (newCost < costNext)
                 {
                     costSoFar[next] = newCost;
                     priority = newCost + Heuristics(goalPoint, nextPoint);

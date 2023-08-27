@@ -17,7 +17,6 @@ public class WorldChunk : MonoBehaviour
     private float FlattenHeight;
     private ChunkSurface Surface;
     private IrregularGrid Grid;
-    private Pathfinder Pathfinder;
 
     private void Awake()
     {
@@ -26,22 +25,20 @@ public class WorldChunk : MonoBehaviour
         Grid = new IrregularGrid(HALFEDGES_BUFFER_SIZE);
         Grid.Build(GridRadius, GridCellDiv, GRID_RELAX_ITERATIONS, GRID_RELAX_SCALE, 0, ChunkSeed);
         FlattenHeight = 0f;
-        Pathfinder = new Pathfinder(100000);
     }
 
     private void Start()
     {
         Surface.Build(Grid, GridCellHeight);
-        Pathfinder.UpdateGrid(Surface.GetComponent<MeshFilter>().sharedMesh);
-        StartIndex = -1;
-        GoalIndex = StartIndex;
+        StartNode = null;
+        GoalNode = null;
     }
 
     void Update()
     {
         if (Input.GetAxis("Mouse ScrollWheel") > 0f)
         {
-            FlattenHeight +=.5f;
+            FlattenHeight += .5f;
             FlattenHeight = Mathf.Min(FlattenHeight, 20f);
             Debug.Log(FlattenHeight);
         }
@@ -60,33 +57,12 @@ public class WorldChunk : MonoBehaviour
             var stopwatchTotal = new System.Diagnostics.Stopwatch();
             stopwatchTotal.Start();
 
-            {
-                var stopwatchMesh = new System.Diagnostics.Stopwatch();
-                stopwatchMesh.Start();
-
-                Surface.Flatten(mouseRay, FlattenHeight);
-                Surface.UpdateMesh();
-
-                stopwatchMesh.Stop();
-                var elapsedTimeMesh = stopwatchMesh.ElapsedMilliseconds;
-                Debug.Log("Update mesh time: " + elapsedTimeMesh + "ms");
-            }
-
-            {
-                var stopwatchGrid = new System.Diagnostics.Stopwatch();
-                stopwatchGrid.Start();
-
-                Pathfinder.Clear();
-                Pathfinder.UpdateGrid(Surface.GetComponent<MeshFilter>().sharedMesh);
-
-                stopwatchGrid.Stop();
-                var elapsedTimeGrid = stopwatchGrid.ElapsedMilliseconds;
-                Debug.Log("Update grid time: " + elapsedTimeGrid + "ms");
-            }
+            Surface.Flatten(mouseRay, FlattenHeight);
+            Surface.UpdateMesh();
 
             stopwatchTotal.Stop();
             var elapsedTimeTotal = stopwatchTotal.ElapsedMilliseconds;
-            Debug.Log("Total time: " + elapsedTimeTotal + "ms");
+            Debug.Log("Update mesh time: " + elapsedTimeTotal + "ms");
         }
 
         if (Input.GetMouseButtonUp(1))
@@ -97,40 +73,54 @@ public class WorldChunk : MonoBehaviour
 
             if (collider.Raycast(mouseRay, out RaycastHit hitInfo, 10000))
             {
-                if (StartIndex < 0) StartIndex = hitInfo.triangleIndex;
-                else if (GoalIndex < 0) GoalIndex = hitInfo.triangleIndex;
+                var cellNode = Surface.GetCellNodeAt(hitInfo.point);
+                if (StartNode == null) StartNode = cellNode;
+                else if (GoalNode == null) GoalNode = cellNode;
 
-                if (StartIndex >= 0 && GoalIndex >= 0)
+                if (StartNode != null && GoalNode != null)
                 {
-                    DebugPath = Pathfinder.FindPath(StartIndex, GoalIndex);
-                    StartIndex = GoalIndex;
-                    GoalIndex = -1;
+                    var path = Surface.GetPath(StartNode, GoalNode);
+                    Surface.FlattenAlongPath(StartNode, GoalNode);
+                    Surface.UpdateMesh();
+
+                    DebugNodePath = path;
+                    StartNode = null;
+                    GoalNode = null;
                 }
             }
         }
     }
 
-    private int StartIndex, GoalIndex;
-    private List<int> DebugPath;
+    private ChunkSurface.CellNode StartNode, GoalNode;
+    private List<ChunkSurface.CellNode> DebugNodePath;
 
     private void OnDrawGizmos()
     {
-        if (Grid != null)
+        //if (Grid != null)
+        //{
+        //    Gizmos.color = Color.black;
+        //    Grid.DrawTriangles(transform);
+        //}
+
+        if (DebugNodePath != null && DebugNodePath.Count > 0)
         {
-            Gizmos.color = Color.black;
-            Grid.DrawTriangles(transform);
+            Gizmos.color = Color.green;
+            foreach (var n in  DebugNodePath)
+            {
+                Surface.DrawCellNode(n);
+            }
         }
 
-        if (Pathfinder != null)
+        if (StartNode != null)
         {
-            //Gizmos.color = Color.gray;
-            //Pathfinder.DrawGrid();
+            Gizmos.color = Color.blue;
+            Surface.DrawCellNode(StartNode);
+        }
 
-            if (DebugPath != null && DebugPath.Count > 0)
-            {
-                Gizmos.color = Color.red;
-                Pathfinder.DrawPath(DebugPath);
-            }
+        if (GoalNode != null)
+        {
+            Gizmos.color = Color.red;
+            Surface.DrawCellNode(GoalNode);
         }
     }
 

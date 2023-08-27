@@ -106,6 +106,73 @@ public class IrregularGrid
         return Halfedges.GetEdgesAroundPoint(edge, ref neighbourEdges, neighbourEdges.Length);
     }
 
+    public List<int> GetDirectNeighbours(int f)
+    {
+        int i, n;
+        QuadEdge edge;
+
+        var neighbourFaces = new List<int>();
+        var foundNeighbours = new HashSet<int>();
+        var edges = new QuadEdge[4] { new(), new(), new(), new() };
+
+        GetEdgesOfFaceIndex(f, edges);
+
+        for (i = 0; i < 4; i++)
+        {
+            edge = edges[i];
+
+            if (edge.Halfedge >= 0)
+            {
+                n = GetFaceIndexOfEdge(edge.Halfedge);
+
+                if (n >= 0 && n != f && !foundNeighbours.Contains(n))
+                {
+                    foundNeighbours.Add(n);
+                    neighbourFaces.Add(n);
+                }
+            }
+        }
+
+        return neighbourFaces;
+    }
+
+    public List<int> GetNeighbourFaces(int f)
+    {
+        int i, e, h, n, neighbourCount;
+        QuadEdge edge;
+
+        var neighbourFaces = new List<int>();
+        var foundNeighbours = new HashSet<int>();
+        var neighbourEdges = new int[16];
+        var edges = new QuadEdge[4] { new(), new(), new(), new() };
+
+        GetEdgesOfFaceIndex(f, edges);
+
+        for (i = 0; i < 4; i++)
+        {
+            edge = edges[i];
+
+            if (edge.Edge >= 0)
+            {
+                neighbourCount = GetNeighbourEdges(Halfedges.PrevHalfedge(edge.Edge), ref neighbourEdges);
+
+                for (e = 0; e < neighbourCount; e++)
+                {
+                    h = neighbourEdges[e];
+                    n = GetFaceIndexOfEdge(h);
+
+                    if (n >= 0 && n != f && !foundNeighbours.Contains(n))
+                    {
+                        foundNeighbours.Add(n);
+                        neighbourFaces.Add(n);
+                    }
+                }
+            }
+        }
+
+        return neighbourFaces;
+    }
+
     private void GetQuadVertices(int f, out float3 a, out float3 b, out float3 c, out float3 d)
     {
         int t0 = Halfedges.TriangleOfEdge(f);
