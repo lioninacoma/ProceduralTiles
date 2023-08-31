@@ -31,4 +31,23 @@ public class Utils
     {
         return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs(a.z - b.z);
     }
+
+    public static int I3(int x, int y, int z, int w, int h)
+    {
+        return x + w * (y + h * z);
+    }
+
+    public static int I2(int x, int y, int w)
+    {
+        return w * x + y;
+    }
+
+    public static int3 I3v(int index, int w, int h)
+    {
+        int x = index % w;
+        int y = index / w % h;
+        int z = index / (w * h);
+        return new int3(x, y, z);
+    }
+
 }

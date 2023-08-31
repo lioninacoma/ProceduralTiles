@@ -61,6 +61,14 @@ public class IrregularGrid
         }
     }
 
+    public float3 GetInterpolatedPosition(int f, float xd, float yd)
+    {
+        GetQuadVertices(f, out float3 a, out float3 b, out float3 c, out float3 d);
+        float3 q = math.lerp(c, d, xd);
+        float3 r = math.lerp(b, a, xd);
+        return math.lerp(r, q, yd);
+    }
+
     public float3 GetVertex(int index)
     {
         return Vertices[index];
@@ -173,15 +181,17 @@ public class IrregularGrid
         return neighbourFaces;
     }
 
-    private void GetQuadVertices(int f, out float3 a, out float3 b, out float3 c, out float3 d)
+    public void GetQuadVertices(int f, out float3 a, out float3 b, out float3 c, out float3 d)
     {
-        int t0 = Halfedges.TriangleOfEdge(f);
-        int t1 = Halfedges.TriangleOfEdge(Halfedges.GetHalfedge(f));
+        int ae = Halfedges.NextHalfedge(f);
+        int be = Halfedges.NextHalfedge(ae);
+        int ce = Halfedges.NextHalfedge(Halfedges.GetHalfedge(f));
+        int de = Halfedges.NextHalfedge(ce);
 
-        int ai = Halfedges.GetEdgeOfTriangle(t0, 0);
-        int bi = Halfedges.GetEdgeOfTriangle(t0, 1);
-        int ci = Halfedges.GetEdgeOfTriangle(t0, 2);
-        int di = Halfedges.GetEdgeOfTriangle(t1, 1);
+        int ai = Halfedges.GetEdge(ae);
+        int bi = Halfedges.GetEdge(be);
+        int ci = Halfedges.GetEdge(ce);
+        int di = Halfedges.GetEdge(de);
 
         a = Vertices[ai];
         b = Vertices[bi];

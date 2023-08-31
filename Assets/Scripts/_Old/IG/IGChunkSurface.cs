@@ -12,7 +12,7 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshCollider))]
 [RequireComponent(typeof(MeshRenderer))]
-public unsafe class ChunkSurface : MonoBehaviour
+public unsafe class IGChunkSurface : MonoBehaviour
 {
     private static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
