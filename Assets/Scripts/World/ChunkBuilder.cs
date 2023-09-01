@@ -70,20 +70,21 @@ public struct ChunkBuilder : IJob
         int mask, edgeMask, edgeCount, bufNo, cellIndex;
         int v0, v1, v2, v3;
         float d, s, g0, g1, t;
-        float3 position, cellPos;
+        float3 position, pos;
         float2 gridInfo;
         var vi = int3.zero;
+        var v = float3.zero;
         var R = new int[3];
         var x = new int[3];
         var e = new int[2];
         var grid = new float[8];
-        var idxPos = int3.zero;
+        var cellPos = int3.zero;
 
-        var cellMin = ChunkMin / CellSize;
         var cellDims = new int3(ChunkSize / CellSize);
 
         R[0] = 1;
         R[1] = DataSize + 1;
+        R[2] = R[1] * R[1];
 
         for (x[2] = 0; x[2] < cellDims[2]; ++x[2])
         {
@@ -91,10 +92,9 @@ public struct ChunkBuilder : IJob
             {
                 for (x[0] = 0; x[0] < cellDims[0]; ++x[0])
                 {
-                    idxPos.x = x[0]; idxPos.y = x[1]; idxPos.z = x[2];
+                    cellPos.x = x[0]; cellPos.y = x[1]; cellPos.z = x[2];
 
-                    bufNo = (x[2] % 2 == 1) ? 0 : 1;
-                    R[2] = R[1] * R[1] * (bufNo * 2 - 1);
+                    bufNo = x[2];
                     m = 1 + R[1] * (1 + bufNo * R[1]);
                     m += (x[0] + x[1] * (DataSize - 1) + 2 * x[1]);
 
@@ -102,9 +102,9 @@ public struct ChunkBuilder : IJob
 
                     for (i = 0; i < 8; i++)
                     {
-                        vi[0] = SurfaceNets.cubeVerts[i, 0] + idxPos[0];
-                        vi[1] = SurfaceNets.cubeVerts[i, 1] + idxPos[1];
-                        vi[2] = SurfaceNets.cubeVerts[i, 2] + idxPos[2];
+                        vi[0] = SurfaceNets.cubeVerts[i, 0] + cellPos[0];
+                        vi[1] = SurfaceNets.cubeVerts[i, 1] + cellPos[1];
+                        vi[2] = SurfaceNets.cubeVerts[i, 2] + cellPos[2];
 
                         d = GetVolumeData(vi);
 
@@ -141,22 +141,20 @@ public struct ChunkBuilder : IJob
                             a = e[0] & k;
                             b = e[1] & k;
                             if (a != b)
-                                position[j] += (a > 0) ? 1f - t : t;
+                                v[j] = (a > 0) ? 1f - t : t;
                             else
-                                position[j] += (a > 0) ? 1f : 0f;
+                                v[j] = (a > 0) ? 1f : 0f;
                         }
 
+                        pos = cellPos + v;
+                        position += pos;
                         edgeCount++;
                     }
 
                     if (edgeCount == 0) continue;
 
                     s = 1f / edgeCount;
-
-                    cellPos = idxPos + cellMin;
-
-                    //position = nodeMin;
-                    position = (position * s + cellPos) * CellSize;
+                    position = (position * s) * CellSize;
                     cellIndex = Utils.I3(x[0], x[1], x[2], DataSize, DataSize);
                     gridInfo = new float2(cellIndex, 0);
 

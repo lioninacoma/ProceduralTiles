@@ -24,6 +24,8 @@ public class World : MonoBehaviour
     {
         var chunkObj = new GameObject("chunk_" + chunkMin);
         chunkObj.transform.SetParent(transform);
+        chunkObj.transform.localPosition = new float3(chunkMin);
+        chunkObj.transform.localScale = Vector3.one;
         var chunk = chunkObj.AddComponent<Chunk>();
         chunk.Min = chunkMin;
         chunk.Size = ChunkSize;

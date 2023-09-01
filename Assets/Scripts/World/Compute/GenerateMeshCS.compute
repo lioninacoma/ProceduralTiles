@@ -1,18 +1,110 @@
-// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
+
+#include "SurfaceNets.cginc"
+#include "MeshStructs.cginc"
 
 #define THREAD_GROUP_SIZE_X 8
 #define THREAD_GROUP_SIZE_Y 8
-#define THREAD_GROUP_SIZE_Z 1
+#define THREAD_GROUP_SIZE_Z 8
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Result;
+StructuredBuffer<float> _SignedDistanceField;
 
-[numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+RWStructuredBuffer<ActiveCell> _ActiveCells;
+RWStructuredBuffer<Vertex> _VertexBuffer;
+RWStructuredBuffer<uint> _IndexBuffer;
+RWStructuredBuffer<uint> _IndexCache;
+RWStructuredBuffer<Counts> _MeshCounts;
+
+uint _DataSize;
+uint _ChunkSize;
+uint _CellSize;
+float3 _ChunkMin;
+
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+inline void CSMain (
+        in uint3 _dispatchThreadID : SV_DispatchThreadID, // DispatchThreadID  = dot(GroupID, numthreads) + GroupThreadId;
+        in uint  _groupIndex       : SV_GroupIndex, // uint GroupIndex = unique index of a thread inside a group
+        in uint3 _groupID          : SV_GroupID, // GroupID = index for each dimension inside a ThreadGroupCount 
+        in uint3 _groupThreadID    : SV_GroupThreadID // uint3 GroupThreadId = indices for each dimension inside a group of the current thread
+    )
 {
-    // TODO: insert actual code here!
+    uint3 cellPos = _dispatchThreadID;
 
-    Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    if (IsUpperBoundary(cellPos, _DataSize)) return;
+
+    uint k;
+	uint e[2];
+	uint3 vi;
+	float3 p;
+	float grid[8];
+	uint mask = 0;
+
+    for (uint i0 = 0; i0 < 8; i0++)
+	{
+		vi = CUBE_VERTS[i0] + cellPos;
+		p = _SignedDistanceField[FI3(vi, _DataSize, _DataSize)];
+
+		grid[i0] = p;
+		mask |= ((p > 0) ? (1 << i0) : 0);
+	}
+
+	if (mask == 0 || mask == 0xff)
+		return;
+	
+	uint edgeMask = EDGE_TABLE[mask];
+	uint edgeCount = 0;
+
+	float3 position = float3(0, 0, 0);
+	float3 pos;
+	float v[3];
+
+	for (uint i1 = 0; i1 < 12; i1++)
+	{
+		if ((edgeMask & (1 << i1)) == 0)
+			continue;
+
+		e[0] = CUBE_EDGES[i1 << 1];
+		e[1] = CUBE_EDGES[(i1 << 1) + 1];
+
+		float g0 = grid[e[0]];
+		float g1 = grid[e[1]];
+		float t = g0 - g1;
+
+		if (abs(t) > 1e-6)
+			t = g0 / t;
+		else continue;
+
+		for (uint j = 0, k = 1; j < 3; j++, k <<= 1)
+		{
+			uint a = e[0] & k;
+			uint b = e[1] & k;
+
+			if (a != b)
+				v[j] = (a > 0) ? 1.0 - t : t;
+			else
+				v[j] = (a > 0) ? 1.0 : 0;
+		}
+
+		pos = cellPos + float3(v[0], v[1], v[2]);
+		position += pos;
+		edgeCount++;
+	}
+
+	if (edgeCount == 0) return;
+
+	float s = 1.0 / edgeCount;
+	position = (s * position) * _CellSize;
+
+	uint cellId = FI3(cellPos, _DataSize, _DataSize);
+	ActiveCell activeCell = {mask, cellId};
+	_ActiveCells[_ActiveCells.IncrementCounter()] = activeCell;
+
+	uint index;
+	InterlockedAdd(_MeshCounts[0].vertexCount, 1, index);
+	
+	Vertex vertex = {position};
+	_VertexBuffer[index] = vertex;
+
+	uint m = GetM(cellPos, _DataSize);
+	_IndexCache[m] = index;
 }

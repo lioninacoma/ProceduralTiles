@@ -1,3 +1,6 @@
+#ifndef __NOISE__
+#define __NOISE__
+
 #define PI 3.14159265359
 #define mod(x, y) (x - y * floor(x / y))
 
@@ -493,3 +496,5 @@ float NHQs(float3 uvw, Texture3D tex, float smooth = 1) {
 	return NHQu(uvw, tex, smooth)*2-1;
 }
 #endif // SAMPLE_NOISE
+
+#endif
