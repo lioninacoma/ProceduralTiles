@@ -2,78 +2,52 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
 using static IsoMeshStructs;
 
-public class IsoSurface
+public struct ChunkBuilder : IJob
 {
-    private float[] SignedDistanceField;
-    private float[] SurfaceHeightField;
-    private int BufferSize;
+    public NativeArray<float> SignedDistanceField;
+    public NativeArray<Vertex> TempVerticesArray;
+    public NativeArray<int> TempIndicesArray;
+    public NativeArray<int> IndexCacheArray;
+    public NativeArray<int> MeshCountsArray;
+
+    public int BufferSize;
     public int DataSize;
 
-    private int3 RootMin;
-    private int RootSize;
-    private int CellSize;
+    public int3 ChunkMin;
+    public int ChunkSize;
+    public int CellSize;
 
-    public IsoSurface(int3 rootMin, int rootSize, int cellSize)
+    public void Execute()
     {
-        RootMin = rootMin;
-        RootSize = rootSize;
-        CellSize = cellSize;
-
-        DataSize = (RootSize / CellSize) + 1;
-        BufferSize = DataSize * DataSize * DataSize;
-
-        SignedDistanceField = new float[BufferSize];
-        SurfaceHeightField = new float[DataSize * DataSize];
+        BuildVolume();
+        Triangulate(MeshCountsArray, TempIndicesArray, TempVerticesArray, IndexCacheArray);
     }
 
-    public void BuildVolume()
+    private void BuildVolume()
     {
         int x, y, z;
-        int3 maxIt = RootSize / CellSize;
-
-        for (x = 0; x < maxIt.x + 1; x++)
-            for (z = 0; z < maxIt.z + 1; z++)
-            {
-                var idxPos = new int3(x, 0, z);
-                float3 pos = idxPos * CellSize + RootMin;
-                SetSurfaceHeightField(idxPos, SurfaceHeightSDF(pos));
-            }
-
-        UpdateVolumeData();
-    }
-
-    public void UpdateVolumeData()
-    {
-        int x, y, z;
-        int3 maxIt = RootSize / CellSize;
+        int3 maxIt = ChunkSize / CellSize;
 
         for (x = 0; x < maxIt.x + 1; x++)
             for (y = 0; y < maxIt.y + 1; y++)
                 for (z = 0; z < maxIt.z + 1; z++)
                 {
                     var idxPos = new int3(x, y, z);
-                    float d = SurfaceDistance(idxPos);
+                    float3 pos = idxPos * CellSize + ChunkMin;
+                    float d = SurfaceSDF(pos);
                     SetVolumeData(idxPos, d);
                 }
     }
 
-    public void SetSurfaceHeightField(int3 p, float distance)
+    private float SurfaceSDF(float3 p)
     {
-        int index = Utils.I2(p.x, p.z, DataSize);
-        if (index < 0 || index >= DataSize * DataSize) return;
-        SurfaceHeightField[index] = distance;
-    }
-
-    public float GetSurfaceHeightField(int3 p)
-    {
-        int index = Utils.I2(p.x, p.z, DataSize);
-        if (index < 0 || index >= DataSize * DataSize) return 0f;
-        return SurfaceHeightField[index];
+        return Noise.FBM_4(p * 0.04f) * 60f;
     }
 
     public void SetVolumeData(int3 p, float density)
@@ -90,39 +64,13 @@ public class IsoSurface
         return SignedDistanceField[index];
     }
 
-    private static float SurfaceHeightSDF(float3 p)
-    {
-        p.y = 0;
-        return Noise.FBM_4(p * 0.04f) * 10f + 5f;
-        //return 10f;
-    }
-
-    public float SurfaceDistance(int3 p)
-    {
-        int index = Utils.I2(p.x, p.z, DataSize);
-        if (index < 0 || index >= DataSize * DataSize) return 0f;
-        float d = SurfaceHeightField[index];
-        return CellSize * p.y - d;
-    }
-
-    public float3 SurfaceNormal(int3 p)
-    {
-        int2 h = new int2(1, 0);
-        return math.normalize(new float3(
-            SurfaceDistance(p + h.xyy) - SurfaceDistance(p - h.xyy),
-            SurfaceDistance(p + h.yxy) - SurfaceDistance(p - h.yxy),
-            SurfaceDistance(p + h.yyx) - SurfaceDistance(p - h.yyx)));
-    }
-
-    public void Triangulate(ref Counts counts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
+    public void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
     {
         int a, b, i, j, k, m, iu, iv, du, dv;
         int mask, edgeMask, edgeCount, bufNo, cellIndex;
         int v0, v1, v2, v3;
-        float s, g0, g1, t;
-        float d, p0, p1;
-        int3 nodeMin, cellPos;
-        float3 position, normal;
+        float d, s, g0, g1, t;
+        float3 position, cellPos;
         float2 gridInfo;
         var vi = int3.zero;
         var R = new int[3];
@@ -131,8 +79,8 @@ public class IsoSurface
         var grid = new float[8];
         var idxPos = int3.zero;
 
-        var cellDims = new int3(RootSize / CellSize);
-        var cellMin = RootMin / CellSize;
+        var cellMin = ChunkMin / CellSize;
+        var cellDims = new int3(ChunkSize / CellSize);
 
         R[0] = 1;
         R[1] = DataSize + 1;
@@ -171,11 +119,6 @@ public class IsoSurface
                     edgeCount = 0;
 
                     position = float3.zero;
-                    normal = float3.zero;
-                    var v = float3.zero;
-                                        
-                    nodeMin = idxPos * CellSize + RootMin; 
-                    //cellPos = idxPos + cellMin;
 
                     for (i = 0; i < 12; ++i)
                     {
@@ -198,12 +141,11 @@ public class IsoSurface
                             a = e[0] & k;
                             b = e[1] & k;
                             if (a != b)
-                                v[j] = a > 0 ? 1f - t : t;
+                                position[j] += (a > 0) ? 1f - t : t;
                             else
-                                v[j] = a > 0 ? 1f : 0;
+                                position[j] += (a > 0) ? 1f : 0f;
                         }
 
-                        position += (nodeMin + v);
                         edgeCount++;
                     }
 
@@ -211,14 +153,15 @@ public class IsoSurface
 
                     s = 1f / edgeCount;
 
+                    cellPos = idxPos + cellMin;
+
                     //position = nodeMin;
-                    position *= s;
-                    normal = math.normalize(s * normal); 
+                    position = (position * s + cellPos) * CellSize;
                     cellIndex = Utils.I3(x[0], x[1], x[2], DataSize, DataSize);
                     gridInfo = new float2(cellIndex, 0);
 
-                    indexCache[m] = counts.VertexCount;
-                    vertexBuffer[counts.VertexCount++] = new Vertex(position, normal, gridInfo);
+                    indexCache[m] = meshCounts[0];
+                    vertexBuffer[meshCounts[0]++] = new Vertex(position, 0, gridInfo);
 
                     for (i = 0; i < 3; ++i)
                     {
@@ -241,28 +184,27 @@ public class IsoSurface
 
                         if ((mask & 1) > 0)
                         {
-                            indexBuffer[counts.IndexCount++] = v0;
-                            indexBuffer[counts.IndexCount++] = v3;
-                            indexBuffer[counts.IndexCount++] = v1;
+                            indexBuffer[meshCounts[1]++] = v0;
+                            indexBuffer[meshCounts[1]++] = v3;
+                            indexBuffer[meshCounts[1]++] = v1;
 
-                            indexBuffer[counts.IndexCount++] = v0;
-                            indexBuffer[counts.IndexCount++] = v2;
-                            indexBuffer[counts.IndexCount++] = v3;
+                            indexBuffer[meshCounts[1]++] = v0;
+                            indexBuffer[meshCounts[1]++] = v2;
+                            indexBuffer[meshCounts[1]++] = v3;
                         }
                         else
                         {
-                            indexBuffer[counts.IndexCount++] = v0;
-                            indexBuffer[counts.IndexCount++] = v3;
-                            indexBuffer[counts.IndexCount++] = v2;
+                            indexBuffer[meshCounts[1]++] = v0;
+                            indexBuffer[meshCounts[1]++] = v3;
+                            indexBuffer[meshCounts[1]++] = v2;
 
-                            indexBuffer[counts.IndexCount++] = v0;
-                            indexBuffer[counts.IndexCount++] = v1;
-                            indexBuffer[counts.IndexCount++] = v3;
+                            indexBuffer[meshCounts[1]++] = v0;
+                            indexBuffer[meshCounts[1]++] = v1;
+                            indexBuffer[meshCounts[1]++] = v3;
                         }
                     }
                 }
             }
         }
     }
-
 }

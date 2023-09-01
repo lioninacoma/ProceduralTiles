@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -26,16 +27,24 @@ public class Chunk : MonoBehaviour
     public int3 Min = 0;
     public int CellSize = 1;
 
-    private int PlaceHeight;
-
-    private IsoSurface ChunkSurface;
+    private int MeshSize;
+    private int MeshDataSize;
+    private int MeshBufferSize;
     private MeshFilter ChunkMeshFilter;
     private MeshRenderer ChunkMeshRenderer;
     private Mesh ChunkMesh;
     private MeshCollider ChunkMeshCollider;
-    NativeArray<Vertex> TempVerticesArray;
-    NativeArray<int> TempIndicesArray;
-    NativeArray<int> IndexCacheArray;
+
+    private NativeArray<float> SignedDistanceField;
+    private NativeArray<Vertex> TempVerticesArray;
+    private NativeArray<int> TempIndicesArray;
+    private NativeArray<int> IndexCacheArray;
+    private NativeArray<int> MeshCountsArray;
+    
+    // TODO: Native Array Pool nutzen um exzessives Chunk building einzuschraenken und um Ressourcen zu sparen.
+    // Chunk building wird ueber World initiiert und dem jeweiligen Chunk die Ressourcen zur Verfuegung gestellt.
+    // Dazu gehoeren alle NativeArrays die fuer das Bauen des Chunks benoetigt werden. Die Arrays werden
+    // aus dem Pool geladen, sobald diese verfuegbar stehen.
 
     private void Awake()
     {
@@ -58,10 +67,15 @@ public class Chunk : MonoBehaviour
 
         ChunkMeshCollider = GetComponent<MeshCollider>();
 
+        MeshSize = Size + CellSize * 2;
+        MeshDataSize = (Size / CellSize) + CellSize * 3;
+        MeshBufferSize = MeshDataSize * MeshDataSize * MeshDataSize;
+
         IndexCacheArray = new NativeArray<int>(INDEX_BUFFER_SIZE, Allocator.Persistent);
         TempIndicesArray = new NativeArray<int>(INDEX_BUFFER_SIZE, Allocator.Persistent);
         TempVerticesArray = new NativeArray<Vertex>(VERTEX_BUFFER_SIZE, Allocator.Persistent);
-        PlaceHeight = 0;
+        SignedDistanceField = new NativeArray<float>(MeshBufferSize, Allocator.Persistent);
+        MeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
     }
 
     private void OnDestroy()
@@ -72,19 +86,39 @@ public class Chunk : MonoBehaviour
             TempIndicesArray.Dispose();
         if (TempVerticesArray != null)
             TempVerticesArray.Dispose();
+        if (SignedDistanceField != null)
+            SignedDistanceField.Dispose();
+        if (MeshCountsArray != null)
+            MeshCountsArray.Dispose();
     }
 
     private void Start()
     {
-        ChunkSurface = new IsoSurface(Min, Size, CellSize);
-        ChunkSurface.BuildVolume();
-        UpdateSurface();
+        var chunkBuilder = new ChunkBuilder
+        {
+            ChunkMin = Min,
+            ChunkSize = MeshSize,
+            DataSize = MeshDataSize,
+            BufferSize = MeshBufferSize,
+            CellSize = CellSize,
+            SignedDistanceField = SignedDistanceField,
+            IndexCacheArray = IndexCacheArray,
+            TempIndicesArray = TempIndicesArray,
+            TempVerticesArray = TempVerticesArray,
+            MeshCountsArray = MeshCountsArray
+        };
+        var jobHandle = chunkBuilder.Schedule();
+        StartCoroutine(UpdateMeshAsync(jobHandle));
     }
 
-    private void UpdateSurface()
+    IEnumerator UpdateMeshAsync(JobHandle job)
     {
+        yield return new WaitUntil(() => job.IsCompleted);
+        job.Complete();
+
         var counts = new Counts();
-        ChunkSurface.Triangulate(ref counts, TempIndicesArray, TempVerticesArray, IndexCacheArray);
+        counts.VertexCount = MeshCountsArray[0];
+        counts.IndexCount = MeshCountsArray[1];
 
         if (counts.IndexCount > 0)
             UpdateMesh(counts);
@@ -131,7 +165,7 @@ public class Chunk : MonoBehaviour
         ChunkMeshCollider.sharedMesh = ChunkMesh;
     }
 
-    private void Update()
+    /*private void Update()
     {
         if (Input.GetAxis("Mouse ScrollWheel") > 0f)
         {
@@ -160,14 +194,12 @@ public class Chunk : MonoBehaviour
                     for (int x = min; x <= max; x++)
                     {
                         var idx = idxPos + new int3(x, 0, z);
-                        //ChunkSurface.SetSurfaceHeightField(idx, PlaceHeight);
                         ChunkSurface.SetVolumeData(idx, 1);
                     }
 
-                //ChunkSurface.UpdateVolumeData();
                 UpdateSurface();
             }
         }
-    }
+    }*/
 
 }

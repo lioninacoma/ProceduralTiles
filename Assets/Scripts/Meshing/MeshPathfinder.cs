@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class IGMeshPathfinder
+public class MeshPathfinder
 {
     private static readonly int MAX_PATH_SIZE = 10000;
 
@@ -22,7 +22,7 @@ public class IGMeshPathfinder
     private Dictionary<ulong, int> EdgeLookup;
     private List<Vector3> Vertices;
 
-    public IGMeshPathfinder(int maxEdgeCount)
+    public MeshPathfinder(int maxEdgeCount)
     {
         Halfedges = new Halfedges(maxEdgeCount);
         HalfedgesCount = 0;
