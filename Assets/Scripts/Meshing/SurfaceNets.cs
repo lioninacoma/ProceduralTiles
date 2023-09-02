@@ -8,7 +8,7 @@ public class SurfaceNets
 	 * Initialize the cube edge indices. This follows the idea of Paul Bourke
 	 * link: http://paulbourke.net/geometry/polygonise/
 	 */
-	public static int[] cubeEdges = new int[24]
+	public static readonly int[] CUBE_EDGES = new int[24]
 	{
 			0,1,0,2,0,4,
 			1,3,1,5,2,3,
@@ -20,7 +20,7 @@ public class SurfaceNets
 	 * Initializes the cube edge table. This follows the idea of Paul Bourke
 	 * link: http://paulbourke.net/geometry/polygonise/
 	 */
-	public static int[] edgeTable = new int[256]
+	public static readonly int[] EDGE_TABLE = new int[256]
 	{
 			0,7,25,30,98,101,123,124,168,175,177,182,202,205,211,212,772,771,797,794,870,865,895,888,
 			940,939,949,946,974,969,983,976,1296,1303,1289,1294,1394,1397,1387,1388,1464,1471,1441,
@@ -38,15 +38,15 @@ public class SurfaceNets
 			177,175,168,124,123,101,98,30,25,7,0
 	};
 
-	public static int[,] cubeVerts = new int[8, 3]
+	public static readonly int[][] CUBE_VERTS = new int[8][]
 	{
-			{ 0, 0, 0 },
-			{ 1, 0, 0 },
-			{ 0, 1, 0 },
-			{ 1, 1, 0 },
-			{ 0, 0, 1 },
-			{ 1, 0, 1 },
-			{ 0, 1, 1 },
-			{ 1, 1, 1 }
+			new int[] { 0, 0, 0 },
+			new int[] { 1, 0, 0 },
+			new int[] { 0, 1, 0 },
+			new int[] { 1, 1, 0 },
+			new int[] { 0, 0, 1 },
+			new int[] { 1, 0, 1 },
+			new int[] { 0, 1, 1 },
+			new int[] { 1, 1, 1 }
 	};
 }

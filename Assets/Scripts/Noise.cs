@@ -40,10 +40,11 @@ public class Noise
         return -1.0f + 2.0f * (k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z);
     }
 
-    private static float3x3 m3 = new float3x3(
-        0.0f, 0.8f, 0.6f,
-        -0.8f, 0.36f, -0.48f,
-        -0.6f, -0.48f, 0.64f);
+    private static readonly float3x3 m3 = new float3x3(
+         0.0f,  0.8f,   0.6f,
+        -0.8f,  0.36f, -0.48f,
+        -0.6f, -0.48f,  0.64f
+    );
 
     public static float FBM_4(float3 x)
     {

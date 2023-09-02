@@ -9,7 +9,7 @@ DECL_FBM_FUNC(FBMSurface, 4, noise(p))
 
 #define M 0.000012
 
-float SurfaceSDF(float3 position, float planetRadius)
+float SurfaceSDF(float3 position)
 {
 	float3 x = position;
 	
@@ -19,10 +19,10 @@ float SurfaceSDF(float3 position, float planetRadius)
 	//float3 x3 = x + float3(1, 71, 171);
 	//float3 x4 = x + float3(131, 1, 31);
 	
-	float d = FBMSurface(x0 * 0.1, 2.0, 0.5) * 100.0;
+	float d = FBMSurface(x0 * 0.1, 2.0, 0.5, 0.5) * 100.0;
 	return d;
 }
 
-#define SurfaceNoise(a, b) SurfaceSDF(a, b)
+#define SurfaceNoise(p) SurfaceSDF(p)
 
 #endif

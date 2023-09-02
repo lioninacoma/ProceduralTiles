@@ -5,23 +5,26 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using Unity.Burst;
 
 using static IsoMeshStructs;
 
+[BurstCompile(FloatPrecision.Medium, FloatMode.Fast)]
 public struct ChunkBuilder : IJob
 {
+    [WriteOnly] public NativeArray<Vertex> TempVerticesArray;
+    [WriteOnly] public NativeArray<int> TempIndicesArray;
+
     public NativeArray<float> SignedDistanceField;
-    public NativeArray<Vertex> TempVerticesArray;
-    public NativeArray<int> TempIndicesArray;
     public NativeArray<int> IndexCacheArray;
     public NativeArray<int> MeshCountsArray;
 
-    public int BufferSize;
-    public int DataSize;
+    [ReadOnly] public int BufferSize;
+    [ReadOnly] public int DataSize;
 
-    public int3 ChunkMin;
-    public int ChunkSize;
-    public int CellSize;
+    [ReadOnly] public int3 ChunkMin;
+    [ReadOnly] public int ChunkSize;
+    [ReadOnly] public int CellSize;
 
     public void Execute()
     {
@@ -32,7 +35,7 @@ public struct ChunkBuilder : IJob
     private void BuildVolume()
     {
         int x, y, z;
-        int3 maxIt = ChunkSize / CellSize;
+        int3 maxIt = ChunkSize;
 
         for (x = 0; x < maxIt.x + 1; x++)
             for (y = 0; y < maxIt.y + 1; y++)
@@ -47,40 +50,39 @@ public struct ChunkBuilder : IJob
 
     private float SurfaceSDF(float3 p)
     {
-        return Noise.FBM_4(p * 0.01f) * 100f;
+        return Noise.FBM_4(p * 0.02f) * 100f;
     }
 
-    public void SetVolumeData(int3 p, float density)
+    private void SetVolumeData(int3 p, float density)
     {
         int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
         if (index < 0 || index >= BufferSize) return;
         SignedDistanceField[index] = density;
     }
 
-    public float GetVolumeData(int3 p)
+    private float GetVolumeData(int3 p)
     {
         int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
         if (index < 0 || index >= BufferSize) return default;
         return SignedDistanceField[index];
     }
 
-    public void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
+    private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
     {
         int a, b, i, j, k, m, iu, iv, du, dv;
         int mask, edgeMask, edgeCount, bufNo, cellIndex;
         int v0, v1, v2, v3;
         float d, s, g0, g1, t;
-        float3 position, pos;
+        float3 position, p;
         float2 gridInfo;
-        var vi = int3.zero;
         var v = float3.zero;
-        var R = new int[3];
-        var x = new int[3];
-        var e = new int[2];
-        var grid = new float[8];
         var cellPos = int3.zero;
-
-        var cellDims = new int3(ChunkSize / CellSize);
+        int3 cellDims = ChunkSize;
+        var vi = int3.zero;
+        var R = int3.zero;
+        var x = int3.zero;
+        var e = int2.zero;
+        var grid = new NativeArray<float>(8, Allocator.Temp);
 
         R[0] = 1;
         R[1] = DataSize + 1;
@@ -102,9 +104,9 @@ public struct ChunkBuilder : IJob
 
                     for (i = 0; i < 8; i++)
                     {
-                        vi[0] = SurfaceNets.cubeVerts[i, 0] + cellPos[0];
-                        vi[1] = SurfaceNets.cubeVerts[i, 1] + cellPos[1];
-                        vi[2] = SurfaceNets.cubeVerts[i, 2] + cellPos[2];
+                        vi[0] = SurfaceNets.CUBE_VERTS[i][0] + cellPos[0];
+                        vi[1] = SurfaceNets.CUBE_VERTS[i][1] + cellPos[1];
+                        vi[2] = SurfaceNets.CUBE_VERTS[i][2] + cellPos[2];
 
                         d = GetVolumeData(vi);
 
@@ -115,7 +117,7 @@ public struct ChunkBuilder : IJob
                     if (mask == 0 || mask == 0xff)
                         continue;
 
-                    edgeMask = SurfaceNets.edgeTable[mask];
+                    edgeMask = SurfaceNets.EDGE_TABLE[mask];
                     edgeCount = 0;
 
                     position = float3.zero;
@@ -125,8 +127,8 @@ public struct ChunkBuilder : IJob
                         if ((edgeMask & (1 << i)) == 0)
                             continue;
 
-                        e[0] = SurfaceNets.cubeEdges[i << 1];
-                        e[1] = SurfaceNets.cubeEdges[(i << 1) + 1];
+                        e[0] = SurfaceNets.CUBE_EDGES[i << 1];
+                        e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
 
                         g0 = grid[e[0]];
                         g1 = grid[e[1]];
@@ -146,8 +148,8 @@ public struct ChunkBuilder : IJob
                                 v[j] = (a > 0) ? 1f : 0f;
                         }
 
-                        pos = cellPos + v;
-                        position += pos;
+                        p = cellPos + v;
+                        position += p;
                         edgeCount++;
                     }
 

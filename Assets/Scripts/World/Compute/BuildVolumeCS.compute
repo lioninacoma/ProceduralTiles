@@ -1,14 +1,35 @@
-// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Result;
+#include "SurfaceNets.cginc"
+#include "MeshStructs.cginc"
+#include "SurfaceNoise.cginc"
 
-[numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+#define THREAD_GROUP_SIZE_X 8
+#define THREAD_GROUP_SIZE_Y 8
+#define THREAD_GROUP_SIZE_Z 8
+
+RWStructuredBuffer<float> _SignedDistanceField;
+
+uint _DataSize;
+uint _CellSize;
+float3 _ChunkMin;
+
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+inline void CSMain (
+        in uint3 _dispatchThreadID : SV_DispatchThreadID, // DispatchThreadID  = dot(GroupID, numthreads) + GroupThreadId;
+        in uint  _groupIndex       : SV_GroupIndex, // uint GroupIndex = unique index of a thread inside a group
+        in uint3 _groupID          : SV_GroupID, // GroupID = index for each dimension inside a ThreadGroupCount 
+        in uint3 _groupThreadID    : SV_GroupThreadID // uint3 GroupThreadId = indices for each dimension inside a group of the current thread
+    )
 {
-    // TODO: insert actual code here!
+    uint3 cellPos = _dispatchThreadID;
 
-    Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+	if (IsUpperBoundary(cellPos, _DataSize)) return;
+
+	float3 worldPos = (cellPos * (float)_CellSize) + _ChunkMin;
+
+	int index = FI3(cellPos, _DataSize, _DataSize);
+	float3 d = SurfaceNoise(worldPos);
+
+	_SignedDistanceField[index] = d;
 }

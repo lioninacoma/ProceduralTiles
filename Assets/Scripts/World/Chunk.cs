@@ -13,15 +13,15 @@ using static IsoMeshStructs;
 [RequireComponent(typeof(MeshRenderer))]
 public class Chunk : MonoBehaviour
 {
-    private static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
+    public static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
         new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
         new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2)
     };
 
-    private static readonly IndexFormat INDEX_FORMAT = IndexFormat.UInt32;
-    private static readonly int VERTEX_BUFFER_SIZE = 65536;
-    private static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 3;
+    public static readonly IndexFormat INDEX_FORMAT = IndexFormat.UInt32;
+    public static readonly int VERTEX_BUFFER_SIZE = 65536;
+    public static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 3;
 
     public int Size = 32;
     public int3 Min = 0;
@@ -67,8 +67,8 @@ public class Chunk : MonoBehaviour
 
         ChunkMeshCollider = GetComponent<MeshCollider>();
 
-        MeshSize = Size + CellSize * 2;
-        MeshDataSize = (Size / CellSize) + CellSize * 3;
+        MeshSize = (Size / CellSize) + 1;
+        MeshDataSize = MeshSize + 1;
         MeshBufferSize = MeshDataSize * MeshDataSize * MeshDataSize;
 
         IndexCacheArray = new NativeArray<int>(INDEX_BUFFER_SIZE, Allocator.Persistent);

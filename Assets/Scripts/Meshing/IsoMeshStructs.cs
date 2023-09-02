@@ -27,6 +27,13 @@ public class IsoMeshStructs
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 0)]
+    public struct ActiveCell
+    {
+        public int Mask;
+        public int CellId;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 0)]
     public struct Vertex
     {
         public float3 Position;

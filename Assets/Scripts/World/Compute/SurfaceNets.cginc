@@ -52,9 +52,9 @@ uint GetM(uint3 cellPos, uint volumeSize)
 	return m;
 }
 
-bool IsUpperBoundary(uint3 cellPos, uint volumeSize)
+bool IsUpperBoundary(uint3 cellPos, uint chunkSize)
 {
-	return cellPos.x >= volumeSize - 1 || cellPos.y >= volumeSize - 1 || cellPos.z >= volumeSize - 1;
+	return cellPos.x >= chunkSize || cellPos.y >= chunkSize || cellPos.z >= chunkSize;
 }
 
 uint FI3(uint3 pos, int w, int h)

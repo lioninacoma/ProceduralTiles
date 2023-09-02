@@ -9,15 +9,14 @@
 
 StructuredBuffer<float> _SignedDistanceField;
 
-RWStructuredBuffer<ActiveCell> _ActiveCells;
-RWStructuredBuffer<Vertex> _VertexBuffer;
-RWStructuredBuffer<uint> _IndexBuffer;
-RWStructuredBuffer<uint> _IndexCache;
 RWStructuredBuffer<Counts> _MeshCounts;
+RWStructuredBuffer<ActiveCell> _ActiveCells;
+RWStructuredBuffer<uint> _IndexCache;
+RWStructuredBuffer<Vertex> _VertexBuffer;
 
 uint _DataSize;
-uint _ChunkSize;
 uint _CellSize;
+uint _ChunkSize;
 float3 _ChunkMin;
 
 [numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
@@ -30,10 +29,10 @@ inline void CSMain (
 {
     uint3 cellPos = _dispatchThreadID;
 
-    if (IsUpperBoundary(cellPos, _DataSize)) return;
+    if (IsUpperBoundary(cellPos, _ChunkSize)) return;
 
     uint k;
-	uint e[2];
+	uint2 e;
 	uint3 vi;
 	float3 p;
 	float grid[8];
@@ -43,7 +42,6 @@ inline void CSMain (
 	{
 		vi = CUBE_VERTS[i0] + cellPos;
 		p = _SignedDistanceField[FI3(vi, _DataSize, _DataSize)];
-
 		grid[i0] = p;
 		mask |= ((p > 0) ? (1 << i0) : 0);
 	}
@@ -54,9 +52,8 @@ inline void CSMain (
 	uint edgeMask = EDGE_TABLE[mask];
 	uint edgeCount = 0;
 
-	float3 position = float3(0, 0, 0);
-	float3 pos;
-	float v[3];
+	float3 position = 0;
+	float3 v = 0;
 
 	for (uint i1 = 0; i1 < 12; i1++)
 	{
@@ -85,8 +82,8 @@ inline void CSMain (
 				v[j] = (a > 0) ? 1.0 : 0;
 		}
 
-		pos = cellPos + float3(v[0], v[1], v[2]);
-		position += pos;
+		p = cellPos + float3(v[0], v[1], v[2]);
+		position += p;
 		edgeCount++;
 	}
 
