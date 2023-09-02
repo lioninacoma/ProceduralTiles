@@ -12,7 +12,7 @@ StructuredBuffer<float> _SignedDistanceField;
 RWStructuredBuffer<Counts> _MeshCounts;
 RWStructuredBuffer<ActiveCell> _ActiveCells;
 RWStructuredBuffer<uint> _IndexCache;
-RWStructuredBuffer<Vertex> _VertexBuffer;
+RWStructuredBuffer<float3> _VertexBuffer;
 
 uint _DataSize;
 uint _CellSize;
@@ -29,57 +29,74 @@ inline void CSMain (
 {
     uint3 cellPos = _dispatchThreadID;
 
-    if (IsUpperBoundary(cellPos, _ChunkSize)) return;
+    if (IsUpperBoundary(cellPos, _ChunkSize))
+	{
+		 return;
+	}
 
-    uint k;
+    uint i, j, k;
 	uint2 e;
 	uint3 vi;
+	float d;
 	float3 p;
 	float grid[8];
 	uint mask = 0;
-
-    for (uint i0 = 0; i0 < 8; i0++)
+	
+	for (i = 0; i < 8; i++)
 	{
-		vi = CUBE_VERTS[i0] + cellPos;
-		p = _SignedDistanceField[FI3(vi, _DataSize, _DataSize)];
-		grid[i0] = p;
-		mask |= ((p > 0) ? (1 << i0) : 0);
+		vi = CUBE_VERTS[i] + cellPos;
+		d = _SignedDistanceField[FI3(vi, _DataSize, _DataSize)];
+		grid[i] = d;
+		mask |= ((d > 0) ? (1 << i) : 0);
 	}
 
 	if (mask == 0 || mask == 0xff)
+	{
 		return;
-	
+	}
+
 	uint edgeMask = EDGE_TABLE[mask];
 	uint edgeCount = 0;
 
 	float3 position = 0;
-	float3 v = 0;
+	float v[3];
 
-	for (uint i1 = 0; i1 < 12; i1++)
+	for (i = 0; i < 12; i++)
 	{
-		if ((edgeMask & (1 << i1)) == 0)
+		if ((edgeMask & (1 << i)) == 0)
+		{
 			continue;
+		}
 
-		e[0] = CUBE_EDGES[i1 << 1];
-		e[1] = CUBE_EDGES[(i1 << 1) + 1];
+		e[0] = CUBE_EDGES[i << 1];
+		e[1] = CUBE_EDGES[(i << 1) + 1];
 
 		float g0 = grid[e[0]];
 		float g1 = grid[e[1]];
 		float t = g0 - g1;
 
 		if (abs(t) > 1e-6)
+		{
 			t = g0 / t;
-		else continue;
+		}
+		else
+		{
+			continue;
+		}
 
-		for (uint j = 0, k = 1; j < 3; j++, k <<= 1)
+		for (j = 0, k = 1; j < 3; j++, k <<= 1)
 		{
 			uint a = e[0] & k;
 			uint b = e[1] & k;
 
 			if (a != b)
-				v[j] = (a > 0) ? 1.0 - t : t;
+			{
+				v[j] = ((a > 0) ? 1.0 - t : t);
+			}
 			else
-				v[j] = (a > 0) ? 1.0 : 0;
+			{
+				v[j] = ((a > 0) ? 1.0 : 0);
+			}
 		}
 
 		p = cellPos + float3(v[0], v[1], v[2]);
@@ -87,7 +104,10 @@ inline void CSMain (
 		edgeCount++;
 	}
 
-	if (edgeCount == 0) return;
+	if (edgeCount == 0)
+	{
+		return;
+	}
 
 	float s = 1.0 / edgeCount;
 	position = (s * position) * _CellSize;
@@ -99,8 +119,7 @@ inline void CSMain (
 	uint index;
 	InterlockedAdd(_MeshCounts[0].vertexCount, 1, index);
 	
-	Vertex vertex = {position};
-	_VertexBuffer[index] = vertex;
+	_VertexBuffer[index] = position;
 
 	uint m = GetM(cellPos, _DataSize);
 	_IndexCache[m] = index;

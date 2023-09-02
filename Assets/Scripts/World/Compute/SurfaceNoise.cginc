@@ -12,6 +12,7 @@ DECL_FBM_FUNC(FBMSurface, 4, noise(p))
 float SurfaceSDF(float3 position)
 {
 	float3 x = position;
+	//return x.y - 12.5;
 	
 	float3 x0 = x * 0.5 + 0.5;
 	//float3 x1 = x + float3(31, 71, 111);

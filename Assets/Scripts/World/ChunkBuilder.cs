@@ -50,7 +50,8 @@ public struct ChunkBuilder : IJob
 
     private float SurfaceSDF(float3 p)
     {
-        return Noise.FBM_4(p * 0.02f) * 100f;
+        return p.y - 10f;
+        //return Noise.FBM_4(p * 0.02f) * 100f;
     }
 
     private void SetVolumeData(int3 p, float density)

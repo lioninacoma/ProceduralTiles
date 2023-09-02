@@ -1,7 +1,7 @@
 #ifndef __SURFACE_NETS__
 #define __SURFACE_NETS__
 
-const uint3 CUBE_VERTS[8] = {
+static const uint3 CUBE_VERTS[8] = {
 	uint3(0, 0, 0),
 	uint3(1, 0, 0),
 	uint3(0, 1, 0),
@@ -16,7 +16,7 @@ const uint3 CUBE_VERTS[8] = {
  * Initialize the cube edge indices. This follows the idea of Paul Bourke
  * link: http://paulbourke.net/geometry/polygonise/
  */
-const uint CUBE_EDGES[24] = {
+static const uint CUBE_EDGES[24] = {
 	0,1,0,2,0,4,
 	1,3,1,5,2,3,
 	2,6,3,7,4,5,
@@ -27,7 +27,7 @@ const uint CUBE_EDGES[24] = {
  * Initializes the cube edge table. This follows the idea of Paul Bourke
  * link: http://paulbourke.net/geometry/polygonise/
  */
-const uint EDGE_TABLE[256] = {
+static const uint EDGE_TABLE[256] = {
 	0,7,25,30,98,101,123,124,168,175,177,182,202,205,211,212,772,771,797,794,870,865,895,888,
 	940,939,949,946,974,969,983,976,1296,1303,1289,1294,1394,1397,1387,1388,1464,1471,1441,
 	1446,1498,1501,1475,1476,1556,1555,1549,1546,1654,1649,1647,1640,1724,1723,1701,1698,1758,
@@ -44,17 +44,17 @@ const uint EDGE_TABLE[256] = {
 	177,175,168,124,123,101,98,30,25,7,0
 };
 
-uint GetM(uint3 cellPos, uint volumeSize)
+uint GetM(uint3 pos, uint size)
 {
-	uint bufNo = cellPos.z;
-	uint m = 1 + (volumeSize + 1) * (1 + bufNo * (volumeSize + 1));
-	m += (cellPos.x + cellPos.y * (volumeSize - 1) + 2 * cellPos.y);
+	uint bufNo = pos.z;
+	uint m = 1 + (size + 1) * (1 + bufNo * (size + 1));
+	m += (pos.x + pos.y * (size - 1) + 2 * pos.y);
 	return m;
 }
 
-bool IsUpperBoundary(uint3 cellPos, uint chunkSize)
+bool IsUpperBoundary(uint3 pos, uint size)
 {
-	return cellPos.x >= chunkSize || cellPos.y >= chunkSize || cellPos.z >= chunkSize;
+	return pos.x >= size || pos.y >= size || pos.z >= size;
 }
 
 uint FI3(uint3 pos, int w, int h)

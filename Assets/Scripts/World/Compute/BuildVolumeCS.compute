@@ -24,12 +24,13 @@ inline void CSMain (
 {
     uint3 cellPos = _dispatchThreadID;
 
-	if (IsUpperBoundary(cellPos, _DataSize)) return;
+	if (IsUpperBoundary(cellPos, _DataSize))
+    {
+        return;
+    }
 
-	float3 worldPos = (cellPos * (float)_CellSize) + _ChunkMin;
-
-	int index = FI3(cellPos, _DataSize, _DataSize);
-	float3 d = SurfaceNoise(worldPos);
-
-	_SignedDistanceField[index] = d;
+	float3 worldPos = (float3(cellPos) * (float)_CellSize) + _ChunkMin;
+	float d = SurfaceNoise(worldPos);
+    
+	_SignedDistanceField[FI3(cellPos, _DataSize, _DataSize)] = d;
 }
