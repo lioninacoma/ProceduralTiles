@@ -1,0 +1,41 @@
+#pragma kernel CSMain
+
+#include "SurfaceNets.cginc"
+#include "MeshStructs.cginc"
+#include "SurfaceNoise.cginc"
+
+#define THREAD_GROUP_SIZE_X 34
+#define THREAD_GROUP_SIZE_Y 9
+#define THREAD_GROUP_SIZE_Z 1
+#define MAX_BUFFERS 8
+
+RWStructuredBuffer<float> _SignedDistanceField;
+
+uint _VolumeBufferSize;
+
+float4 _NodeKeys[MAX_BUFFERS];
+float4 _DataSizes[MAX_BUFFERS];
+
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+inline void CSMain (uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+{
+    uint chunkId = gid.x;
+	uint dataSize = _DataSizes[chunkId].x;
+	uint3 cellPos = uint3(gtid.x, gid.y * THREAD_GROUP_SIZE_Y + gtid.y, gid.z);
+
+	if (IsUpperBoundary(cellPos, dataSize))
+    {
+        return;
+    }
+
+	uint volumeOffset = chunkId * _VolumeBufferSize;
+
+	float4 key = _NodeKeys[chunkId];
+	float3 chunkMin = key.xyz;
+	float cellSize = key.w;
+
+	float3 worldPos = (float3(cellPos) * cellSize) + chunkMin;
+	float d = SurfaceNoise(worldPos);
+    
+	_SignedDistanceField[volumeOffset + FI3(cellPos, dataSize, dataSize)] = d;
+}

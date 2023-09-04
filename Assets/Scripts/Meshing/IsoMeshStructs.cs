@@ -31,6 +31,7 @@ public class IsoMeshStructs
     {
         public int Mask;
         public int CellId;
+        public int ChunkId;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 0)]
@@ -47,4 +48,15 @@ public class IsoMeshStructs
             GridInfo = gridInfo;
         }
     }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 0)]
+    public struct Args
+    {
+        public uint indexCountPerInstance;
+        public uint instanceCount;
+        public uint startIndexLocation;
+        public uint baseVertexLocation;
+        public uint startInstanceLocation;
+    }
+
 }

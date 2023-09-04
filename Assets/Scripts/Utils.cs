@@ -1,10 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using Unity.Mathematics;
 using UnityEngine;
 
-public class Utils
+public static class Utils
 {
     // Sourced from: https://www.shadertoy.com/view/tl3XRN
     // By BrunoLevy 

@@ -3,9 +3,10 @@
 #include "SurfaceNets.cginc"
 #include "MeshStructs.cginc"
 
-#define THREAD_GROUP_SIZE_X 8
-#define THREAD_GROUP_SIZE_Y 8
-#define THREAD_GROUP_SIZE_Z 8
+#define THREAD_GROUP_SIZE_X 33
+#define THREAD_GROUP_SIZE_Y 9
+#define THREAD_GROUP_SIZE_Z 1
+#define MAX_BUFFERS 8
 
 StructuredBuffer<float> _SignedDistanceField;
 
@@ -14,25 +15,32 @@ RWStructuredBuffer<ActiveCell> _ActiveCells;
 RWStructuredBuffer<uint> _IndexCache;
 RWStructuredBuffer<float3> _VertexBuffer;
 
-uint _DataSize;
-uint _CellSize;
-uint _ChunkSize;
-float3 _ChunkMin;
+uint _VolumeBufferSize;
+uint _VertexBufferSize;
+uint _IndexCacheSize;
+
+float4 _NodeKeys[MAX_BUFFERS];
+float4 _DataSizes[MAX_BUFFERS];
 
 [numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
-inline void CSMain (
-        in uint3 _dispatchThreadID : SV_DispatchThreadID, // DispatchThreadID  = dot(GroupID, numthreads) + GroupThreadId;
-        in uint  _groupIndex       : SV_GroupIndex, // uint GroupIndex = unique index of a thread inside a group
-        in uint3 _groupID          : SV_GroupID, // GroupID = index for each dimension inside a ThreadGroupCount 
-        in uint3 _groupThreadID    : SV_GroupThreadID // uint3 GroupThreadId = indices for each dimension inside a group of the current thread
-    )
+inline void CSMain (uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
-    uint3 cellPos = _dispatchThreadID;
+	uint chunkId = gid.x;
+	uint dataSize = _DataSizes[chunkId].x;
+	uint chunkSize = dataSize - 1;
+	uint3 cellPos = uint3(gtid.x, gid.y * THREAD_GROUP_SIZE_Y + gtid.y, gid.z);
 
-    if (IsUpperBoundary(cellPos, _ChunkSize))
+    if (IsUpperBoundary(cellPos, chunkSize))
 	{
 		 return;
 	}
+	
+	uint volumeOffset = chunkId * _VolumeBufferSize;
+	uint vertexOffset = chunkId * _VertexBufferSize;
+	uint indexCacheOffset = chunkId * _IndexCacheSize;
+
+	float4 key = _NodeKeys[chunkId];
+	float cellSize = key.w;
 
     uint i, j, k;
 	uint2 e;
@@ -42,10 +50,11 @@ inline void CSMain (
 	float grid[8];
 	uint mask = 0;
 	
+	[unroll]
 	for (i = 0; i < 8; i++)
 	{
 		vi = CUBE_VERTS[i] + cellPos;
-		d = _SignedDistanceField[FI3(vi, _DataSize, _DataSize)];
+		d = _SignedDistanceField[volumeOffset + FI3(vi, dataSize, dataSize)];
 		grid[i] = d;
 		mask |= ((d > 0) ? (1 << i) : 0);
 	}
@@ -61,6 +70,7 @@ inline void CSMain (
 	float3 position = 0;
 	float v[3];
 
+	[unroll]
 	for (i = 0; i < 12; i++)
 	{
 		if ((edgeMask & (1 << i)) == 0)
@@ -84,6 +94,7 @@ inline void CSMain (
 			continue;
 		}
 
+		[unroll]
 		for (j = 0, k = 1; j < 3; j++, k <<= 1)
 		{
 			uint a = e[0] & k;
@@ -110,17 +121,17 @@ inline void CSMain (
 	}
 
 	float s = 1.0 / edgeCount;
-	position = (s * position) * _CellSize;
+	position = (s * position) * cellSize;
 
-	uint cellId = FI3(cellPos, _DataSize, _DataSize);
-	ActiveCell activeCell = {mask, cellId};
+	uint cellId = FI3(cellPos, dataSize, dataSize);
+	ActiveCell activeCell = {mask, cellId, chunkId};
 	_ActiveCells[_ActiveCells.IncrementCounter()] = activeCell;
 
 	uint index;
-	InterlockedAdd(_MeshCounts[0].vertexCount, 1, index);
+	InterlockedAdd(_MeshCounts[chunkId].vertexCount, 1, index);
 	
-	_VertexBuffer[index] = position;
+	_VertexBuffer[vertexOffset + index] = position;
 
-	uint m = GetM(cellPos, _DataSize);
-	_IndexCache[m] = index;
+	uint m = GetM(cellPos, dataSize);
+	_IndexCache[indexCacheOffset + m] = index;
 }

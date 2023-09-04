@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 
-public class Noise
+public static class Noise
 {
     // Noise functions by Inigo Quilez
     private static float hash1(float n)

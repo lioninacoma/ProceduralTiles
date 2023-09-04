@@ -6,15 +6,19 @@
 #define THREAD_GROUP_SIZE_X 16
 #define THREAD_GROUP_SIZE_Y 1
 #define THREAD_GROUP_SIZE_Z 1
+#define MAX_BUFFERS 8
 
 StructuredBuffer<ActiveCell> _ActiveCells;
 StructuredBuffer<uint> _IndexCache;
+StructuredBuffer<Args> _ArgsBuffer;
 
 RWStructuredBuffer<Counts> _MeshCounts;
 RWStructuredBuffer<uint3> _IndexBuffer;
 
-uint _DataSize;
-uint _ActiveCellCount;
+uint _IndexBufferSize;
+uint _IndexCacheSize;
+
+float4 _DataSizes[MAX_BUFFERS];
 
 [numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
 inline void CSMain (
@@ -25,7 +29,12 @@ inline void CSMain (
     )
 {
 	uint id = _dispatchThreadID.x;
-    if (id >= _ActiveCellCount)
+
+	// Counter copied from active cells buffer to args buffer.
+	// From ChunkBuilderGPU.cs: ComputeBuffer.CopyCount(ActiveCells, ArgsBuffer, 0);
+	uint activeCellCount = _ArgsBuffer[0].indexCountPerInstance; 
+
+    if (id >= activeCellCount)
 	{
 		return;
 	}
@@ -38,17 +47,24 @@ inline void CSMain (
 		return;
 	}
 
-	int R[3] = { 1, _DataSize + 1, (_DataSize + 1) * (_DataSize + 1) };
+	uint chunkId = activeCell.chunkId;
+	uint dataSize = _DataSizes[chunkId].x;
+	
+	uint indexCacheOffset = chunkId * _IndexCacheSize;
+	uint indexOffset = chunkId * _IndexBufferSize;
 
-	uint3 cellPos = FI3V(activeCell.cellId, _DataSize, _DataSize);
-	uint m = GetM(cellPos, _DataSize);
+	int R[3] = { 1, dataSize + 1, (dataSize + 1) * (dataSize + 1) };
+
+	uint3 cellPos = FI3V(activeCell.cellId, dataSize, dataSize);
+	uint m = GetM(cellPos, dataSize);
 
 	uint edgeMask = EDGE_TABLE[mask];
 	uint v0, v1, v2, v3;
 	int currentIndexCount;
 
-	v0 = _IndexCache[m];
+	v0 = _IndexCache[indexCacheOffset + m];
 
+	[unroll]
 	for (uint i = 0; i < 3; i++)
 	{
 		if ((edgeMask & (1 << i)) == 0)
@@ -67,21 +83,21 @@ inline void CSMain (
 		int du = R[iu];
 		int dv = R[iv];
 
-		v1 = _IndexCache[m - du];
-		v2 = _IndexCache[m - dv];
-		v3 = _IndexCache[m - du - dv];
+		v1 = _IndexCache[indexCacheOffset + (m - du)];
+		v2 = _IndexCache[indexCacheOffset + (m - dv)];
+		v3 = _IndexCache[indexCacheOffset + (m - du - dv)];
 
-		InterlockedAdd(_MeshCounts[0].indexCount, 2, currentIndexCount);
+		InterlockedAdd(_MeshCounts[chunkId].indexCount, 2, currentIndexCount);
 
 		if ((mask & 1) > 0)
 		{
-			_IndexBuffer[currentIndexCount] = uint3(v0, v3, v1);
-			_IndexBuffer[currentIndexCount + 1] = uint3(v0, v2, v3);
+			_IndexBuffer[indexOffset + currentIndexCount] = uint3(v0, v3, v1);
+			_IndexBuffer[indexOffset + currentIndexCount + 1] = uint3(v0, v2, v3);
 		}
 		else
 		{
-			_IndexBuffer[currentIndexCount] = uint3(v0, v3, v2);
-			_IndexBuffer[currentIndexCount + 1] = uint3(v0, v1, v3);
+			_IndexBuffer[indexOffset + currentIndexCount] = uint3(v0, v3, v2);
+			_IndexBuffer[indexOffset + currentIndexCount + 1] = uint3(v0, v1, v3);
 		}
 	}
 }

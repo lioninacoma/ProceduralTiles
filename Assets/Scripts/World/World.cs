@@ -1,44 +1,55 @@
+using ChunkBuilder;
 using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
 using Unity.Mathematics;
 using UnityEngine;
 
-[RequireComponent(typeof(ChunkBuilderGPU))]
+[RequireComponent(typeof(ChunkBuilder.ChunkBuilder))]
 public class World : MonoBehaviour
 {
     public int ChunkSize = 32;
     public int CellSize = 1;
-    public int3 ChunkDims = new int3(2, 1, 2);
+    public int3 ChunkDims = 1;
 
-    private ChunkBuilderGPU ChunkBuilder;
-    private List<Chunk> chunks;
+    private ChunkBuilder.ChunkBuilder ChunkBuilder;
+    private List<Chunk> Chunks;
+    private List<int3> PendingChunks;
 
     private void Awake()
     {
-        ChunkBuilder = GetComponent<ChunkBuilderGPU>();
-        chunks = new List<Chunk>();
+        ChunkBuilder = GetComponent<ChunkBuilder.ChunkBuilder>();
+        Chunks = new List<Chunk>();
+        PendingChunks = new List<int3>();
     }
 
     void Start()
     {
-        //for (int z = 0; z < ChunkDims.z; z++)
-        //    for (int y = 0; y < ChunkDims.y; y++)
-        //        for (int x = 0; x < ChunkDims.x; x++)
-        //        {
-        //            int3 min = new int3(x, y, z) * ChunkSize;
-        //            AddChunk(min);
-        //        }
-
-        ChunkBuilder.AddJob(0, 0, OnChunkBuilt);
+        for (int z = 0; z < ChunkDims.z; z++)
+            for (int y = 0; y < ChunkDims.y; y++)
+                for (int x = 0; x < ChunkDims.x; x++)
+                {
+                    int3 min = new int3(x, y, z) * ChunkSize;
+                    BuildChunk(min);
+                }
     }
 
-    private void OnChunkBuilt(int chunkIndex, Mesh.MeshDataArray dataArray)
+    private void BuildChunk(int3 chunkMin)
     {
-        Debug.Log("Chunk built, index: " + chunkIndex);
+        int chunkIndex = PendingChunks.Count;
+        PendingChunks.Add(chunkMin);
+        ChunkBuilder.AddJob(chunkMin, chunkIndex, OnChunkBuilt);
     }
 
-    private int AddChunk(int3 chunkMin)
+    private void OnChunkBuilt(int chunkIndex, int indexCount, Mesh.MeshDataArray dataArray)
+    {
+        if (indexCount > 0)
+        {
+            var chunk = AddChunk(PendingChunks[chunkIndex]);
+            chunk.SetMesh(dataArray);
+        }
+    }
+
+    private Chunk AddChunk(int3 chunkMin)
     {
         var chunkObj = new GameObject("chunk_" + chunkMin);
         chunkObj.transform.SetParent(transform);
@@ -46,13 +57,8 @@ public class World : MonoBehaviour
         chunkObj.transform.localScale = Vector3.one;
 
         var chunk = chunkObj.AddComponent<Chunk>();
-        chunk.Min = chunkMin;
-        chunk.Size = ChunkSize;
-        chunk.CellSize = CellSize;
+        Chunks.Add(chunk);
 
-        int index = chunks.Count;
-        chunks.Add(chunk);
-
-        return index;
+        return chunk;
     }
 }

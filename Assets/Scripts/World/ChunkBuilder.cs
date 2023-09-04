@@ -1,211 +1,110 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.Collections;
-using Unity.Jobs;
+using System.Runtime.CompilerServices;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
-using Unity.Burst;
+using UnityEngine.Rendering;
 
-using static IsoMeshStructs;
-
-[BurstCompile(FloatPrecision.Medium, FloatMode.Fast)]
-public struct ChunkBuilder : IJob
+namespace ChunkBuilder
 {
-    [WriteOnly] public NativeArray<Vertex> TempVerticesArray;
-    [WriteOnly] public NativeArray<int> TempIndicesArray;
-
-    public NativeArray<float> SignedDistanceField;
-    public NativeArray<int> IndexCacheArray;
-    public NativeArray<int> MeshCountsArray;
-
-    [ReadOnly] public int BufferSize;
-    [ReadOnly] public int DataSize;
-
-    [ReadOnly] public int3 ChunkMin;
-    [ReadOnly] public int ChunkSize;
-    [ReadOnly] public int CellSize;
-
-    public void Execute()
+    public class ChunkBuilder : MonoBehaviour
     {
-        BuildVolume();
-        Triangulate(MeshCountsArray, TempIndicesArray, TempVerticesArray, IndexCacheArray);
-    }
+        public static readonly IndexFormat INDEX_FORMAT = IndexFormat.UInt32;
+        public static readonly int VERTEX_BUFFER_SIZE = 16000;
+        public static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 3;
+        public static readonly int INDEX_CACHE_SIZE = INDEX_BUFFER_SIZE;
+        public static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
+        };
 
-    private void BuildVolume()
-    {
-        int x, y, z;
-        int3 maxIt = ChunkSize;
+        private static readonly int MAX_CONCURRENT_SCHEDULED_JOBS = 16;
 
-        for (x = 0; x < maxIt.x + 1; x++)
-            for (y = 0; y < maxIt.y + 1; y++)
-                for (z = 0; z < maxIt.z + 1; z++)
-                {
-                    var idxPos = new int3(x, y, z);
-                    float3 pos = idxPos * CellSize + ChunkMin;
-                    float d = SurfaceSDF(pos);
-                    SetVolumeData(idxPos, d);
-                }
-    }
-
-    private float SurfaceSDF(float3 p)
-    {
-        return p.y - 10f;
-        //return Noise.FBM_4(p * 0.02f) * 100f;
-    }
-
-    private void SetVolumeData(int3 p, float density)
-    {
-        int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-        if (index < 0 || index >= BufferSize) return;
-        SignedDistanceField[index] = density;
-    }
-
-    private float GetVolumeData(int3 p)
-    {
-        int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-        if (index < 0 || index >= BufferSize) return default;
-        return SignedDistanceField[index];
-    }
-
-    private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
-    {
-        int a, b, i, j, k, m, iu, iv, du, dv;
-        int mask, edgeMask, edgeCount, bufNo, cellIndex;
-        int v0, v1, v2, v3;
-        float d, s, g0, g1, t;
-        float3 position, p;
-        float2 gridInfo;
-        var v = float3.zero;
-        var cellPos = int3.zero;
-        int3 cellDims = ChunkSize;
-        var vi = int3.zero;
-        var R = int3.zero;
-        var x = int3.zero;
-        var e = int2.zero;
-        var grid = new NativeArray<float>(8, Allocator.Temp);
-
-        R[0] = 1;
-        R[1] = DataSize + 1;
-        R[2] = R[1] * R[1];
-
-        for (x[2] = 0; x[2] < cellDims[2]; ++x[2])
+        public struct JobParams
         {
-            for (x[1] = 0; x[1] < cellDims[1]; ++x[1])
+            public Action<int, int, Mesh.MeshDataArray> Callback;
+            public int3 ChunkMin;
+            public int ChunkIndex;
+        }
+
+        private List<IChunkBuilderWorker> Workers;
+        private Queue<JobParams> PendingBuildJobs;
+        private Queue<int> AvailableWorkers;
+
+        public int GPUWorkerCount = 4;
+        public int CPUWorkerCount = 4;
+
+        private void Awake()
+        {
+            Workers = new List<IChunkBuilderWorker>();
+            PendingBuildJobs = new Queue<JobParams>();
+            AvailableWorkers = new Queue<int>();
+        }
+
+        private void Start()
+        {
+            IChunkBuilderWorker worker;
+
+            if (GPUWorkerCount > 0)
             {
-                for (x[0] = 0; x[0] < cellDims[0]; ++x[0])
+                ChunkBuilderWorker_GPU.MAX_BUFFERS = GPUWorkerCount;
+                worker = transform.AddComponent<ChunkBuilderWorker_GPU>();
+                worker.SetWorkerIndex(Workers.Count);
+                AvailableWorkers.Enqueue(Workers.Count);
+                Workers.Add(worker);
+            }
+
+            for (int i = 0; i < CPUWorkerCount; i++)
+            {
+                worker = transform.AddComponent<ChunkBuilderWorker_CPU>();
+                worker.SetWorkerIndex(Workers.Count);
+                AvailableWorkers.Enqueue(Workers.Count);
+                Workers.Add(worker);
+            }
+        }
+
+        public void AddJob(int3 chunkMin, int chunkIndex, Action<int, int, Mesh.MeshDataArray> callback)
+        {
+            PendingBuildJobs.Enqueue(new JobParams()
+            {
+                ChunkMin = chunkMin,
+                ChunkIndex = chunkIndex,
+                Callback = callback
+            });
+        }
+
+        public void GetChunkMeta(out int CellSize, out int ChunkSize, out int DataSize, out int BufferSize)
+        {
+            var world = GetComponentInParent<World>();
+            CellSize = world.CellSize;
+            ChunkSize = (world.ChunkSize / CellSize) + 1;
+            DataSize = ChunkSize + 1;
+            BufferSize = DataSize * DataSize * DataSize;
+        }
+
+        private void Update()
+        {
+            if (AvailableWorkers.Count == 0 || PendingBuildJobs.Count == 0) return;
+
+            int maxJobsCount = Math.Min(PendingBuildJobs.Count, MAX_CONCURRENT_SCHEDULED_JOBS);
+
+            for (int i = 0; i < maxJobsCount && AvailableWorkers.Count > 0; i++)
+            {
+                var worker = Workers[AvailableWorkers.Dequeue()];
+                var job = PendingBuildJobs.Dequeue();
+                bool stillAvailable = worker.ScheduleJob(job);
+                
+                if (stillAvailable)
                 {
-                    cellPos.x = x[0]; cellPos.y = x[1]; cellPos.z = x[2];
-
-                    bufNo = x[2];
-                    m = 1 + R[1] * (1 + bufNo * R[1]);
-                    m += (x[0] + x[1] * (DataSize - 1) + 2 * x[1]);
-
-                    mask = 0;
-
-                    for (i = 0; i < 8; i++)
-                    {
-                        vi[0] = SurfaceNets.CUBE_VERTS[i][0] + cellPos[0];
-                        vi[1] = SurfaceNets.CUBE_VERTS[i][1] + cellPos[1];
-                        vi[2] = SurfaceNets.CUBE_VERTS[i][2] + cellPos[2];
-
-                        d = GetVolumeData(vi);
-
-                        grid[i] = d;
-                        mask |= (d > 0) ? (1 << i) : 0;
-                    }
-
-                    if (mask == 0 || mask == 0xff)
-                        continue;
-
-                    edgeMask = SurfaceNets.EDGE_TABLE[mask];
-                    edgeCount = 0;
-
-                    position = float3.zero;
-
-                    for (i = 0; i < 12; ++i)
-                    {
-                        if ((edgeMask & (1 << i)) == 0)
-                            continue;
-
-                        e[0] = SurfaceNets.CUBE_EDGES[i << 1];
-                        e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
-
-                        g0 = grid[e[0]];
-                        g1 = grid[e[1]];
-                        t = g0 - g1;
-
-                        if (Mathf.Abs(t) > 1e-6)
-                            t = g0 / t;
-                        else continue;
-
-                        for (j = 0, k = 1; j < 3; ++j, k <<= 1)
-                        {
-                            a = e[0] & k;
-                            b = e[1] & k;
-                            if (a != b)
-                                v[j] = (a > 0) ? 1f - t : t;
-                            else
-                                v[j] = (a > 0) ? 1f : 0f;
-                        }
-
-                        p = cellPos + v;
-                        position += p;
-                        edgeCount++;
-                    }
-
-                    if (edgeCount == 0) continue;
-
-                    s = 1f / edgeCount;
-                    position = (position * s) * CellSize;
-                    cellIndex = Utils.I3(x[0], x[1], x[2], DataSize, DataSize);
-                    gridInfo = new float2(cellIndex, 0);
-
-                    indexCache[m] = meshCounts[0];
-                    vertexBuffer[meshCounts[0]++] = new Vertex(position, 0, gridInfo);
-
-                    for (i = 0; i < 3; ++i)
-                    {
-                        if ((edgeMask & (1 << i)) == 0)
-                            continue;
-
-                        iu = (i + 1) % 3;
-                        iv = (i + 2) % 3;
-
-                        if (x[iu] == 0 || x[iv] == 0)
-                            continue;
-
-                        du = R[iu];
-                        dv = R[iv];
-
-                        v0 = indexCache[m];
-                        v1 = indexCache[m - du];
-                        v2 = indexCache[m - dv];
-                        v3 = indexCache[m - du - dv];
-
-                        if ((mask & 1) > 0)
-                        {
-                            indexBuffer[meshCounts[1]++] = v0;
-                            indexBuffer[meshCounts[1]++] = v3;
-                            indexBuffer[meshCounts[1]++] = v1;
-
-                            indexBuffer[meshCounts[1]++] = v0;
-                            indexBuffer[meshCounts[1]++] = v2;
-                            indexBuffer[meshCounts[1]++] = v3;
-                        }
-                        else
-                        {
-                            indexBuffer[meshCounts[1]++] = v0;
-                            indexBuffer[meshCounts[1]++] = v3;
-                            indexBuffer[meshCounts[1]++] = v2;
-
-                            indexBuffer[meshCounts[1]++] = v0;
-                            indexBuffer[meshCounts[1]++] = v1;
-                            indexBuffer[meshCounts[1]++] = v3;
-                        }
-                    }
+                    AvailableWorkers.Enqueue(worker.GetWorkerIndex());
                 }
             }
+        }
+
+        public void OnJobReady(int index)
+        {
+            AvailableWorkers.Enqueue(index);
         }
     }
 }
