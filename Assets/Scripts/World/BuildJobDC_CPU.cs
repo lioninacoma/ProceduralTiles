@@ -48,26 +48,22 @@ namespace ChunkBuilder
 
         private static float Surface(float3 x)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.01f) * 30.0f + 10.0f);
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.005f) * 100.0f + 20.0f);
         }
 
         private static float Map(float3 x)
         {
-            float d0 = SdSphere(x - new float3(100f, 24f, 120f), 9.999f);
-            float d1 = SdSphere(x - new float3(108f, 24f, 120f), 4.999f);
-            float d2 = SdSphere(x - new float3(116f, 24f, 120f), 4.999f);
-            float d3 = SdSphere(x - new float3(124f, 24f, 120f), 3.999f);
+            float r = 60f;
+            float3 p = new float3(60f, 30f, 60f);
+            float d = SdSphere(x - (new float3(r, 0, r) + p), r);
             float s = Surface(x);
-            s = OpSubtraction(d0, s);
-            s = OpUnion(d1, s);
-            s = OpSubtraction(d2, s);
-            s = OpSubtraction(d3, s);
+            s = OpSubtraction(d, s);
             return s;
         }
 
         private float3 CalcNormal(float3 x)
         {
-            const float eps = 0.01f;
+            const float eps = 0.001f;
             float2 h = new float2(eps, 0);
             return math.normalize(new float3(Map(x + h.xyy) - Map(x - h.xyy),
                                              Map(x + h.yxy) - Map(x - h.yxy),
@@ -76,20 +72,20 @@ namespace ChunkBuilder
         
         private float3 Raycast(float3 p0, float3 p1, float g0)
         {
-            const int linearSeachSteps = 4;
-            const int binarySeachSteps = 8;
+            const int linearSearchSteps = 6;
+            const int binarySearchSteps = 8;
             const float targetDist = .001f;
-            float step = 1f / linearSeachSteps;
+            float step = 1f / linearSearchSteps;
 
             float3 p = float3.zero;
             float3 ro = (g0 < 0) ? p1 : p0;
             float3 rt = (g0 < 0) ? p0 : p1;
             float3 rd = rt - ro;
             float d;
-            float t = 0f;
+            float t = step;
 
             // linear search
-            for (int i = 0; i < linearSeachSteps; i++)
+            for (int i = 0; i < linearSearchSteps; i++)
             {
                 p = ro + rd * t;
                 d = Map(p);
@@ -103,7 +99,7 @@ namespace ChunkBuilder
             }
 
             // binary search
-            for (int i = 0; i < binarySeachSteps; i++)
+            for (int i = 0; i < binarySearchSteps; i++)
             {
                 p = ro + rd * t;
                 d = Map(p);
@@ -126,8 +122,8 @@ namespace ChunkBuilder
             int i, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
             int v0, v1, v2, v3;
-            float d, s;
-            float3 position, normal, p, n, p0, p1, vi;
+            float d;
+            float3 position, p, n, p0, p1, vi;
             var cellPos = int3.zero;
             int3 cellDims = ChunkSize;
             var R = int3.zero;
@@ -168,9 +164,6 @@ namespace ChunkBuilder
                         edgeMask = SurfaceNets.EDGE_TABLE[mask];
                         edgeCount = 0;
 
-                        //position = float3.zero;
-                        //normal = float3.zero;
-
                         QefSolver.ClearMatTri(ref ATA);
                         var ATb = float4.zero;
                         var pointaccum = float4.zero;
@@ -194,34 +187,21 @@ namespace ChunkBuilder
 
                             QefSolver.Add(n, p, ref ATA, ref ATb, ref pointaccum);
 
-                            //position += p;
-                            //normal += n;
-
                             edgeCount++;
                         }
 
                         if (edgeCount == 0) continue;
 
-                        //s = 1f / edgeCount;
-                        //position *= s;
-                        //normal *= s;
+                        QefSolver.Solve(ATA, ATb, pointaccum, out position);
 
-                        QefSolver.Solve(ATA, ATb, pointaccum, out float3 positionQef);
-                        //positionQef = ((positionQef + cellPos) * CellSize) + ChunkMin;
-
-                        //const float tl = .5f;
                         //float3 min = (cellPos * CellSize) + ChunkMin;
                         //float3 max = min + CellSize;
-                        //if (positionQef.x < min.x - tl || positionQef.x > max.x + tl ||
-                        //    positionQef.y < min.y - tl || positionQef.y > max.y + tl ||
-                        //    positionQef.z < min.z - tl || positionQef.z > max.z + tl)
+                        //if (position.x < min.x || position.x > max.x ||
+                        //    position.y < min.y || position.y > max.y ||
+                        //    position.z < min.z || position.z > max.z)
                         //{
-                        //    // NOP
+                        //    position = pointaccum.xyz / pointaccum.w;
                         //}
-                        //else
-                        {
-                            position = positionQef;
-                        }
 
                         indexCache[m] = meshCounts[0];
                         vertexBuffer[meshCounts[0]++] = position - ChunkMin;

@@ -156,9 +156,9 @@ MonoBehaviour:
   ChunkSize: 32
   CellSize: 1
   ChunkDims:
-    x: 8
+    x: 16
     y: 4
-    z: 8
+    z: 16
 --- !u!4 &871264438
 Transform:
   m_ObjectHideFlags: 0
@@ -187,7 +187,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   GPUWorkerCount: 0
-  CPUWorkerCount: 8
+  CPUWorkerCount: 16
 --- !u!1 &1542291994
 GameObject:
   m_ObjectHideFlags: 0

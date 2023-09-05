@@ -7,7 +7,7 @@ using UnityEngine;
 public static class QefSolver
 {
     public static readonly int SVD_NUM_SWEEPS = 5;
-    public static readonly float PSUEDO_INVERSE_THRESHOLD = 0.1f;
+    public static readonly float PSEUDO_INVERSE_THRESHOLD = 0.1f;
 
     private static void SvdVmulSym(out float4 result, NativeArray<float> A, float4 v)
     {
@@ -53,8 +53,7 @@ public static class QefSolver
     {
         if (vtav[a][b] == 0f) return;
 
-        float c, s;
-        GivensCoeffsSym(vtav[a][a], vtav[a][b], vtav[b][b], out c, out s);
+        GivensCoeffsSym(vtav[a][a], vtav[a][b], vtav[b][b], out float c, out float s);
 
         float x, y, z;
         x = vtav[a][a]; y = vtav[b][b]; z = vtav[a][b];
@@ -108,9 +107,9 @@ public static class QefSolver
 
     public static void SvdPseudoInverse(out float3x3 o, float4 sigma, float3x3 v)
     {
-        float d0 = SvdInvDet(sigma.x, PSUEDO_INVERSE_THRESHOLD);
-        float d1 = SvdInvDet(sigma.y, PSUEDO_INVERSE_THRESHOLD);
-        float d2 = SvdInvDet(sigma.z, PSUEDO_INVERSE_THRESHOLD);
+        float d0 = SvdInvDet(sigma.x, PSEUDO_INVERSE_THRESHOLD);
+        float d1 = SvdInvDet(sigma.y, PSEUDO_INVERSE_THRESHOLD);
+        float d2 = SvdInvDet(sigma.z, PSEUDO_INVERSE_THRESHOLD);
 
         o = float3x3.zero;
         o[0][0] = v[0][0] * d0 * v[0][0] + v[0][1] * d1 * v[0][1] + v[0][2] * d2 * v[0][2];
