@@ -186,8 +186,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c08babf4646e4b41ab729eca75e5b58, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GPUWorkerCount: 4
-  CPUWorkerCount: 6
+  GPUWorkerCount: 0
+  CPUWorkerCount: 8
 --- !u!1 &1542291994
 GameObject:
   m_ObjectHideFlags: 0

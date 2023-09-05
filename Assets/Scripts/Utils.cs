@@ -24,9 +24,9 @@ public static class Utils
         return (det >= 1e-6f && t >= 0f && u >= 0f && v >= 0f && (u + v) <= 1f);
     }
 
-    public static float ManhattanDistance(Vector3 a, Vector3 b)
+    public static float ManhattanDistance(float3 a, float3 b)
     {
-        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs(a.z - b.z);
+        return math.abs(a.x - b.x) + math.abs(a.y - b.y) + math.abs(a.z - b.z);
     }
 
     public static int I3(int x, int y, int z, int w, int h)
@@ -45,6 +45,11 @@ public static class Utils
         int y = index / w % h;
         int z = index / (w * h);
         return new int3(x, y, z);
+    }
+
+    public static float PlaneDist(float3 planePoint, float3 planeNormal, float3 point)
+    {
+        return math.abs(math.dot(planeNormal, point - planePoint));
     }
 
 }

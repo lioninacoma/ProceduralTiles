@@ -6,13 +6,19 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using Unity.Burst;
+using Qef;
+using MathNet.Numerics.LinearAlgebra;
+using UnityEditor.PackageManager;
+using MathNet.Numerics.LinearAlgebra.Double;
+using System.Reflection;
+using static IsoMeshStructs;
 
 namespace ChunkBuilder
 {
-    [BurstCompile(FloatPrecision.High, FloatMode.Default)]
-    public struct BuildJob_CPU : IJob
+    [BurstCompile(FloatPrecision.High, FloatMode.Strict)]
+    public struct BuildJobDC_CPU : IJob
     {
-        [WriteOnly] public NativeArray<float3> TempVerticesArray;
+        [WriteOnly] public NativeArray<Vertex> TempVerticesArray;
         [WriteOnly] public NativeArray<int> TempIndicesArray;
 
         public NativeArray<float> SignedDistanceField;
@@ -29,62 +35,83 @@ namespace ChunkBuilder
 
         public void Execute()
         {
-            BuildVolume();
             Triangulate(MeshCountsArray, TempIndicesArray, TempVerticesArray, IndexCacheArray);
         }
 
-        private void BuildVolume()
-        {
-            int x, y, z;
-            int3 maxIt = ChunkSize;
+        private static float OpUnion(float d1, float d2) { return math.min(d1, d2); }
 
-            for (x = 0; x < maxIt.x + 1; x++)
-                for (y = 0; y < maxIt.y + 1; y++)
-                    for (z = 0; z < maxIt.z + 1; z++)
-                    {
-                        var idxPos = new int3(x, y, z);
-                        float3 pos = idxPos * CellSize + ChunkMin;
-                        float d = SurfaceSDF(pos);
-                        SetVolumeData(idxPos, d);
-                    }
+        private static float OpSubtraction(float d1, float d2) { return math.max(-d1, d2); }
+
+        private static float OpIntersection(float d1, float d2) { return math.max(d1, d2); }
+
+        private static float SdSphere(float3 p, float s)
+        {
+            return math.length(p) - s;
         }
 
-        private float SurfaceSDF(float3 x)
+        private static float SdBox(float3 p, float3 b)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
-            return math.length(x - 127f) - 127f;
-            return Noise.FBM_4(x * 0.05f);
+            float3 q = math.abs(p) - b;
+            return math.length(math.max(q, 0.0f)) + math.min(math.max(q.x, math.max(q.y, q.z)), 0.0f);
         }
 
-        private void SetVolumeData(int3 p, float density)
+        private static float Surface(float3 x)
         {
-            int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-            if (index < 0 || index >= BufferSize) return;
-            SignedDistanceField[index] = density;
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.005f) * 80.0f + 20.0f);
         }
 
-        private float GetVolumeData(int3 p)
+        private static float Map(float3 x)
         {
-            int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-            if (index < 0 || index >= BufferSize) return default;
-            return SignedDistanceField[index];
+            float d = SdSphere(x - 122f, 120f);
+            //float d = SdSphere(x - 60f, 120f);
+            //return d;
+            float s = Surface(x);
+            //float s = SdBox(x - 122f, 120f);
+            return OpSubtraction(d, s);
         }
 
-        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
+        private float3 CalcNormal(float3 x)
         {
-            int a, b, i, j, k, m, iu, iv, du, dv;
+            const float eps = 0.001f;
+            float2 h = new float2(eps, 0);
+            return math.normalize(new float3(Map(x + h.xyy) - Map(x - h.xyy),
+                                             Map(x + h.yxy) - Map(x - h.yxy),
+                                             Map(x + h.yyx) - Map(x - h.yyx)));
+        }
+        
+        private float3 Raycast(float3 p0, float3 p1)
+        {
+            const int steps = 16;
+            const float minDist = 1f / steps;
+
+            float3 ro = p0;
+            float3 rd = p1 - p0;
+            float d;
+            float t = 0;
+
+            for (int i = 0; i < steps && t < 1f; i++)
+            {
+                d = math.abs(Map(ro + rd * t));
+                if (d < minDist * t) break;
+                t += d;
+            }
+
+            return ro + t * rd;
+        }
+
+        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
+        {
+            int i, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
             int v0, v1, v2, v3;
-            float d, s, g0, g1, t;
-            float3 position, p;
-            var v = float3.zero;
+            float d, s;
+            float3 position, normal, p, n, p0, p1, vi;
             var cellPos = int3.zero;
             int3 cellDims = ChunkSize;
-            var vi = int3.zero;
             var R = int3.zero;
             var x = int3.zero;
             var e = int2.zero;
-            var grid = new NativeArray<float>(8, Allocator.Temp);
+            var ATA = new NativeArray<float>(6, Allocator.Temp);
 
             R[0] = 1;
             R[1] = DataSize + 1;
@@ -107,9 +134,7 @@ namespace ChunkBuilder
                         for (i = 0; i < 8; i++)
                         {
                             vi = SurfaceNets.CUBE_VERTS[i] + cellPos;
-                            d = GetVolumeData(vi);
-
-                            grid[i] = d;
+                            d = Map(vi * CellSize + ChunkMin);
                             mask |= (d > 0) ? (1 << i) : 0;
                         }
 
@@ -120,6 +145,11 @@ namespace ChunkBuilder
                         edgeCount = 0;
 
                         position = float3.zero;
+                        normal = float3.zero;
+
+                        QefSolver.ClearMatTri(ref ATA);
+                        var ATb = float4.zero;
+                        var pointaccum = float4.zero;
 
                         for (i = 0; i < 12; ++i)
                         {
@@ -129,36 +159,50 @@ namespace ChunkBuilder
                             e[0] = SurfaceNets.CUBE_EDGES[i << 1];
                             e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
 
-                            g0 = grid[e[0]];
-                            g1 = grid[e[1]];
-                            t = g0 - g1;
+                            p0 = SurfaceNets.CUBE_VERTS[e[0]] + cellPos;
+                            p1 = SurfaceNets.CUBE_VERTS[e[1]] + cellPos;
 
-                            if (Mathf.Abs(t) > 1e-6)
-                                t = g0 / t;
-                            else continue;
+                            p0 = p0 * CellSize + ChunkMin;
+                            p1 = p1 * CellSize + ChunkMin;
 
-                            for (j = 0, k = 1; j < 3; ++j, k <<= 1)
-                            {
-                                a = e[0] & k;
-                                b = e[1] & k;
-                                if (a != b)
-                                    v[j] = (a > 0) ? 1f - t : t;
-                                else
-                                    v[j] = (a > 0) ? 1f : 0f;
-                            }
+                            p = Raycast(p0, p1);
+                            n = CalcNormal(p);
 
-                            p = cellPos + v;
+                            var pp = ((p - ChunkMin) / CellSize) - cellPos;
+
+                            QefSolver.Add(n, pp, ref ATA, ref ATb, ref pointaccum);
+
                             position += p;
+                            normal += n;
+
                             edgeCount++;
                         }
 
                         if (edgeCount == 0) continue;
 
                         s = 1f / edgeCount;
-                        position = (position * s) * CellSize;
+                        position *= s;
+                        normal *= s;
+
+                        QefSolver.Solve(ATA, ATb, pointaccum, out float3 positionQef);
+                        positionQef = ((positionQef + cellPos) * CellSize) + ChunkMin;
+
+                        //const float tl = .5f;
+                        //float3 min = (cellPos * CellSize) + ChunkMin;
+                        //float3 max = min + CellSize;
+                        //if (positionQef.x < min.x - tl || positionQef.x > max.x + tl ||
+                        //    positionQef.y < min.y - tl || positionQef.y > max.y + tl ||
+                        //    positionQef.z < min.z - tl || positionQef.z > max.z + tl)
+                        //{
+                        //    // NOP
+                        //}
+                        //else
+                        {
+                            position = positionQef;
+                        }
 
                         indexCache[m] = meshCounts[0];
-                        vertexBuffer[meshCounts[0]++] = position;
+                        vertexBuffer[meshCounts[0]++] = new Vertex(position - ChunkMin, normal);
 
                         for (i = 0; i < 3; ++i)
                         {

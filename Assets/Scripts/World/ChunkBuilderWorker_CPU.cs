@@ -13,7 +13,7 @@ namespace ChunkBuilder
     public class ChunkBuilderWorker_CPU : MonoBehaviour, IChunkBuilderWorker
     {
         private NativeArray<float> SignedDistanceField;
-        private NativeArray<float3> TempVerticesArray;
+        private NativeArray<Vertex> TempVerticesArray;
         private NativeArray<int> TempIndicesArray;
         private NativeArray<int> IndexCacheArray;
         private NativeArray<int> MeshCountsArray;
@@ -23,7 +23,7 @@ namespace ChunkBuilder
         private int CellSize;
         private int ChunkSize;
 
-        private BuildJob_CPU CurrentJob;
+        private BuildJobDC_CPU CurrentJob;
         private ChunkBuilder.JobParams CurrentParams;
         private ChunkBuilder Builder;
         private bool JobActive;
@@ -37,7 +37,7 @@ namespace ChunkBuilder
 
             IndexCacheArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
             TempIndicesArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
-            TempVerticesArray = new NativeArray<float3>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
+            TempVerticesArray = new NativeArray<Vertex>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
             SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
             MeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
 
@@ -46,23 +46,27 @@ namespace ChunkBuilder
 
         private void OnDestroy()
         {
-            if (IndexCacheArray != null)
-                IndexCacheArray.Dispose();
-            if (TempIndicesArray != null)
-                TempIndicesArray.Dispose();
-            if (TempVerticesArray != null)
-                TempVerticesArray.Dispose();
-            if (SignedDistanceField != null)
-                SignedDistanceField.Dispose();
-            if (MeshCountsArray != null)
-                MeshCountsArray.Dispose();
+            try
+            {
+                if (IndexCacheArray != null)
+                    IndexCacheArray.Dispose();
+                if (TempIndicesArray != null)
+                    TempIndicesArray.Dispose();
+                if (TempVerticesArray != null)
+                    TempVerticesArray.Dispose();
+                if (SignedDistanceField != null)
+                    SignedDistanceField.Dispose();
+                if (MeshCountsArray != null)
+                    MeshCountsArray.Dispose();
+            }
+            catch (Exception) { }
         }
 
         public bool ScheduleJob(ChunkBuilder.JobParams Params)
         {
             if (JobActive) return true;
 
-            CurrentJob = new BuildJob_CPU
+            CurrentJob = new BuildJobDC_CPU
             {
                 ChunkMin = Params.ChunkMin,
                 ChunkSize = ChunkSize,
@@ -97,7 +101,7 @@ namespace ChunkBuilder
             yield return StartCoroutine(UpdateChunk(jobHandle, job));
         }
 
-        private IEnumerator UpdateChunk(JobHandle jobHandle, BuildJob_CPU job)
+        private IEnumerator UpdateChunk(JobHandle jobHandle, BuildJobDC_CPU job)
         {
             yield return new WaitUntil(() => jobHandle.IsCompleted);
             jobHandle.Complete();
@@ -116,7 +120,7 @@ namespace ChunkBuilder
                 data.SetVertexBufferParams(counts.VertexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
                 data.SetIndexBufferParams(counts.IndexCount, ChunkBuilder.INDEX_FORMAT);
 
-                var vertices = data.GetVertexData<float3>();
+                var vertices = data.GetVertexData<Vertex>();
                 var indices = data.GetIndexData<int>();
 
                 for (int i = 0; i < counts.VertexCount; i++)

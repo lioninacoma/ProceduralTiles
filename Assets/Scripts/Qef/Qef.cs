@@ -258,7 +258,7 @@ namespace Qef
 
     public static class Svd
     {
-        const int SVD_NUM_SWEEPS = 5;
+        const int SVD_NUM_SWEEPS = 8;
         const float Tiny_Number = 1.0e-20f;
 
         public static float Abs(float x)

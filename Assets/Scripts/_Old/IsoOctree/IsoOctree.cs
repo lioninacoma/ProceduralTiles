@@ -355,7 +355,7 @@ public class IsoOctree
             }
 
             node.DrawInfo.Index = counts.VertexCount;
-            var v = new Vertex(node.DrawInfo.Position, node.DrawInfo.Normal, 0f);
+            var v = new Vertex(node.DrawInfo.Position, node.DrawInfo.Normal);
             vertexBuffer[counts.VertexCount++] = v;
         }
     }

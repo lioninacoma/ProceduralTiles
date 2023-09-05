@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class SurfaceNets
@@ -38,15 +39,15 @@ public class SurfaceNets
 			177,175,168,124,123,101,98,30,25,7,0
 	};
 
-	public static readonly int[][] CUBE_VERTS = new int[8][]
+	public static readonly int3[] CUBE_VERTS = new int3[8]
 	{
-			new int[] { 0, 0, 0 },
-			new int[] { 1, 0, 0 },
-			new int[] { 0, 1, 0 },
-			new int[] { 1, 1, 0 },
-			new int[] { 0, 0, 1 },
-			new int[] { 1, 0, 1 },
-			new int[] { 0, 1, 1 },
-			new int[] { 1, 1, 1 }
+			new int3 (0, 0, 0),
+			new int3 (1, 0, 0),
+			new int3 (0, 1, 0),
+			new int3 (1, 1, 0),
+			new int3 (0, 0, 1),
+			new int3 (1, 0, 1),
+			new int3 (0, 1, 1),
+			new int3 (1, 1, 1)
 	};
 }

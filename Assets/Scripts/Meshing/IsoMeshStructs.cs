@@ -39,13 +39,11 @@ public class IsoMeshStructs
     {
         public float3 Position;
         public float3 Normal;
-        public float2 GridInfo;
 
-        public Vertex(float3 position, float3 normal, float2 gridInfo)
+        public Vertex(float3 position, float3 normal)
         {
             Position = position;
             Normal = normal;
-            GridInfo = gridInfo;
         }
     }
 
