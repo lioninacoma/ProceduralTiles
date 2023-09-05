@@ -187,7 +187,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   GPUWorkerCount: 0
-  CPUWorkerCount: 16
+  CPUWorkerCount: 8
 --- !u!1 &1542291994
 GameObject:
   m_ObjectHideFlags: 0
