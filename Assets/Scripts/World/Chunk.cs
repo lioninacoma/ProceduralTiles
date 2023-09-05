@@ -45,7 +45,7 @@ public class Chunk : MonoBehaviour
         Mesh.ApplyAndDisposeWritableMeshData(dataArray, ChunkMesh, flags);
 
         ChunkMesh.RecalculateBounds();
-        //ChunkMesh.RecalculateNormals();
+        ChunkMesh.RecalculateNormals();
         ChunkMeshCollider.sharedMesh = ChunkMesh;
     }
 

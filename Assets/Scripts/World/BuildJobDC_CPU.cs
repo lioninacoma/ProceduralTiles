@@ -1,27 +1,18 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEngine;
 using Unity.Burst;
-using Qef;
-using MathNet.Numerics.LinearAlgebra;
-using UnityEditor.PackageManager;
-using MathNet.Numerics.LinearAlgebra.Double;
-using System.Reflection;
-using static IsoMeshStructs;
 
 namespace ChunkBuilder
 {
-    [BurstCompile(FloatPrecision.High, FloatMode.Strict)]
+    [BurstCompile(FloatPrecision.High, FloatMode.Default)]
     public struct BuildJobDC_CPU : IJob
     {
-        [WriteOnly] public NativeArray<Vertex> TempVerticesArray;
+        [WriteOnly] public NativeArray<float3> TempVerticesArray;
         [WriteOnly] public NativeArray<int> TempIndicesArray;
 
-        public NativeArray<float> SignedDistanceField;
         public NativeArray<int> IndexCacheArray;
         public NativeArray<int> MeshCountsArray;
 
@@ -57,49 +48,80 @@ namespace ChunkBuilder
 
         private static float Surface(float3 x)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.005f) * 80.0f + 20.0f);
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.01f) * 30.0f + 10.0f);
         }
 
         private static float Map(float3 x)
         {
-            float d = SdSphere(x - 122f, 120f);
-            //float d = SdSphere(x - 60f, 120f);
-            //return d;
+            float d0 = SdSphere(x - new float3(100f, 24f, 120f), 9.999f);
+            float d1 = SdSphere(x - new float3(108f, 24f, 120f), 4.999f);
+            float d2 = SdSphere(x - new float3(116f, 24f, 120f), 4.999f);
+            float d3 = SdSphere(x - new float3(124f, 24f, 120f), 3.999f);
             float s = Surface(x);
-            //float s = SdBox(x - 122f, 120f);
-            return OpSubtraction(d, s);
+            s = OpSubtraction(d0, s);
+            s = OpUnion(d1, s);
+            s = OpSubtraction(d2, s);
+            s = OpSubtraction(d3, s);
+            return s;
         }
 
         private float3 CalcNormal(float3 x)
         {
-            const float eps = 0.001f;
+            const float eps = 0.01f;
             float2 h = new float2(eps, 0);
             return math.normalize(new float3(Map(x + h.xyy) - Map(x - h.xyy),
                                              Map(x + h.yxy) - Map(x - h.yxy),
                                              Map(x + h.yyx) - Map(x - h.yyx)));
         }
         
-        private float3 Raycast(float3 p0, float3 p1)
+        private float3 Raycast(float3 p0, float3 p1, float g0)
         {
-            const int steps = 16;
-            const float minDist = 1f / steps;
+            const int linearSeachSteps = 4;
+            const int binarySeachSteps = 8;
+            const float targetDist = .001f;
+            float step = 1f / linearSeachSteps;
 
-            float3 ro = p0;
-            float3 rd = p1 - p0;
+            float3 p = float3.zero;
+            float3 ro = (g0 < 0) ? p1 : p0;
+            float3 rt = (g0 < 0) ? p0 : p1;
+            float3 rd = rt - ro;
             float d;
-            float t = 0;
+            float t = 0f;
 
-            for (int i = 0; i < steps && t < 1f; i++)
+            // linear search
+            for (int i = 0; i < linearSeachSteps; i++)
             {
-                d = math.abs(Map(ro + rd * t));
-                if (d < minDist * t) break;
-                t += d;
+                p = ro + rd * t;
+                d = Map(p);
+
+                if (d < 0)
+                {
+                    break;
+                }
+
+                t += step;
             }
 
-            return ro + t * rd;
+            // binary search
+            for (int i = 0; i < binarySeachSteps; i++)
+            {
+                p = ro + rd * t;
+                d = Map(p);
+
+                if (math.abs(d) < targetDist)
+                {
+                    return p;
+                }
+
+                step *= 0.5f;
+                t += step * ((d > 0) ? 1 : 0);
+                t -= step * ((d < 0) ? 1 : 0);
+            }
+
+            return p;
         }
 
-        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<Vertex> vertexBuffer, NativeArray<int> indexCache)
+        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
         {
             int i, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
@@ -111,6 +133,7 @@ namespace ChunkBuilder
             var R = int3.zero;
             var x = int3.zero;
             var e = int2.zero;
+            var grid = new NativeArray<float>(8, Allocator.Temp);
             var ATA = new NativeArray<float>(6, Allocator.Temp);
 
             R[0] = 1;
@@ -135,6 +158,7 @@ namespace ChunkBuilder
                         {
                             vi = SurfaceNets.CUBE_VERTS[i] + cellPos;
                             d = Map(vi * CellSize + ChunkMin);
+                            grid[i] = d;
                             mask |= (d > 0) ? (1 << i) : 0;
                         }
 
@@ -144,8 +168,8 @@ namespace ChunkBuilder
                         edgeMask = SurfaceNets.EDGE_TABLE[mask];
                         edgeCount = 0;
 
-                        position = float3.zero;
-                        normal = float3.zero;
+                        //position = float3.zero;
+                        //normal = float3.zero;
 
                         QefSolver.ClearMatTri(ref ATA);
                         var ATb = float4.zero;
@@ -165,27 +189,25 @@ namespace ChunkBuilder
                             p0 = p0 * CellSize + ChunkMin;
                             p1 = p1 * CellSize + ChunkMin;
 
-                            p = Raycast(p0, p1);
+                            p = Raycast(p0, p1, grid[e[0]]);
                             n = CalcNormal(p);
 
-                            var pp = ((p - ChunkMin) / CellSize) - cellPos;
+                            QefSolver.Add(n, p, ref ATA, ref ATb, ref pointaccum);
 
-                            QefSolver.Add(n, pp, ref ATA, ref ATb, ref pointaccum);
-
-                            position += p;
-                            normal += n;
+                            //position += p;
+                            //normal += n;
 
                             edgeCount++;
                         }
 
                         if (edgeCount == 0) continue;
 
-                        s = 1f / edgeCount;
-                        position *= s;
-                        normal *= s;
+                        //s = 1f / edgeCount;
+                        //position *= s;
+                        //normal *= s;
 
                         QefSolver.Solve(ATA, ATb, pointaccum, out float3 positionQef);
-                        positionQef = ((positionQef + cellPos) * CellSize) + ChunkMin;
+                        //positionQef = ((positionQef + cellPos) * CellSize) + ChunkMin;
 
                         //const float tl = .5f;
                         //float3 min = (cellPos * CellSize) + ChunkMin;
@@ -202,7 +224,7 @@ namespace ChunkBuilder
                         }
 
                         indexCache[m] = meshCounts[0];
-                        vertexBuffer[meshCounts[0]++] = new Vertex(position - ChunkMin, normal);
+                        vertexBuffer[meshCounts[0]++] = position - ChunkMin;
 
                         for (i = 0; i < 3; ++i)
                         {

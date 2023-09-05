@@ -13,7 +13,7 @@ namespace ChunkBuilder
     public class ChunkBuilderWorker_CPU : MonoBehaviour, IChunkBuilderWorker
     {
         private NativeArray<float> SignedDistanceField;
-        private NativeArray<Vertex> TempVerticesArray;
+        private NativeArray<float3> TempVerticesArray;
         private NativeArray<int> TempIndicesArray;
         private NativeArray<int> IndexCacheArray;
         private NativeArray<int> MeshCountsArray;
@@ -37,7 +37,7 @@ namespace ChunkBuilder
 
             IndexCacheArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
             TempIndicesArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
-            TempVerticesArray = new NativeArray<Vertex>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
+            TempVerticesArray = new NativeArray<float3>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
             SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
             MeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
 
@@ -89,7 +89,6 @@ namespace ChunkBuilder
             MeshCountsArray[1] = 0;
 
             var job = CurrentJob;
-            job.SignedDistanceField = SignedDistanceField;
             job.IndexCacheArray = IndexCacheArray;
             job.TempIndicesArray = TempIndicesArray;
             job.TempVerticesArray = TempVerticesArray;
@@ -117,20 +116,20 @@ namespace ChunkBuilder
                 var dataArray = Mesh.AllocateWritableMeshData(1);
                 var data = dataArray[0];
 
-                data.SetVertexBufferParams(counts.VertexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
+                data.SetVertexBufferParams(counts.IndexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
                 data.SetIndexBufferParams(counts.IndexCount, ChunkBuilder.INDEX_FORMAT);
 
-                var vertices = data.GetVertexData<Vertex>();
+                var vertices = data.GetVertexData<float3>();
                 var indices = data.GetIndexData<int>();
 
-                for (int i = 0; i < counts.VertexCount; i++)
+                for (int i = 0; i < counts.IndexCount; i++)
                 {
-                    vertices[i] = TempVerticesArray[i];
+                    vertices[i] = TempVerticesArray[TempIndicesArray[i]];
                 }
 
                 for (int i = 0; i < counts.IndexCount; i++)
                 {
-                    indices[i] = TempIndicesArray[i];
+                    indices[i] = i;
                 }
 
                 data.subMeshCount = 1;

@@ -16,8 +16,7 @@ namespace ChunkBuilder
         public static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 3;
         public static readonly int INDEX_CACHE_SIZE = INDEX_BUFFER_SIZE;
         public static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
-            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3)
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
         };
 
         private static readonly int MAX_CONCURRENT_SCHEDULED_JOBS = 16;
