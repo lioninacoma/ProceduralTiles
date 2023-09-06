@@ -36,6 +36,24 @@ namespace ChunkBuilder
 
         private static float OpIntersection(float d1, float d2) { return math.max(d1, d2); }
 
+        private static float OpSmoothUnion(float d1, float d2, float k)
+        {
+            float h = math.clamp(0.5f + 0.5f * (d2 - d1) / k, 0f, 1f);
+            return math.lerp(d2, d1, h) - k * h * (1f - h);
+        }
+
+        private static float OpSmoothSubtraction(float d1, float d2, float k)
+        {
+            float h = math.clamp(0.5f - 0.5f * (d2 + d1) / k, 0f, 1f);
+            return math.lerp(d2, -d1, h) + k * h * (1f - h);
+        }
+
+        float OpSmoothIntersection(float d1, float d2, float k)
+        {
+            float h = math.clamp(0.5f - 0.5f * (d2 - d1) / k, 0f, 1f);
+            return math.lerp(d2, d1, h) + k * h * (1f - h);
+        }
+
         private static float SdSphere(float3 p, float s)
         {
             return math.length(p) - s;
@@ -56,15 +74,15 @@ namespace ChunkBuilder
         {
             float r = 60f;
             float3 p = new float3(60f, 30f, 60f);
-            float d = SdSphere(x - (new float3(r, 0, r) + p), r);
+            float d = SdBox(x - (new float3(r, 0, r) + p), r);
             float s = Surface(x);
-            s = OpSubtraction(d, s);
+            s = OpSmoothSubtraction(d, s, 8f);
             return s;
         }
 
         private float3 CalcNormal(float3 x)
         {
-            const float eps = 0.001f;
+            const float eps = 0.0001f;
             float2 h = new float2(eps, 0);
             return math.normalize(new float3(Map(x + h.xyy) - Map(x - h.xyy),
                                              Map(x + h.yxy) - Map(x - h.yxy),
@@ -73,9 +91,9 @@ namespace ChunkBuilder
         
         private float3 Raycast(float3 p0, float3 p1, float g0)
         {
-            const int linearSearchSteps = 4;
-            const int binarySearchSteps = 4;
-            const float targetDist = .001f;
+            const int linearSearchSteps = 8;
+            const int binarySearchSteps = 8;
+            const float targetDist = .0001f;
             float step = 1f / linearSearchSteps;
 
             float3 p = float3.zero;
@@ -230,10 +248,10 @@ namespace ChunkBuilder
 
                         // gradient descent with inflated position
                         position += normal * .1f * dotWithMassPoint;
-                        for (j = 0; j < 6; j++)
+                        for (j = 0; j < 16; j++)
                         {
                             d = Map(position);
-                            if (math.abs(d) < 0.001f) break;
+                            if (math.abs(d) < 0.0001f) break;
                             position -= CalcNormal(position) * d;
                         }
 
