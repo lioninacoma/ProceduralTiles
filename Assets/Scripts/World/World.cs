@@ -1,8 +1,8 @@
-using ChunkBuilder;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
+using ChunkBuilder;
 
 [RequireComponent(typeof(ChunkBuilder.ChunkBuilder))]
 public class World : MonoBehaviour

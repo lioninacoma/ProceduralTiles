@@ -9,7 +9,7 @@ public static class QefSolver
     public static readonly int SVD_NUM_SWEEPS = 5;
     public static readonly float PSEUDO_INVERSE_THRESHOLD = 0.1f;
 
-    private static void SvdVmulSym(out float4 result, NativeArray<float> A, float4 v)
+    public static void SvdVmulSym(out float4 result, NativeArray<float> A, float4 v)
     {
         float4 A_row_x = new float4(A[0], A[1], A[2], 0f);
         result = float4.zero;

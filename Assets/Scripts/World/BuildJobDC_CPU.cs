@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Burst;
+using UnityEngine;
 
 namespace ChunkBuilder
 {
@@ -72,8 +73,8 @@ namespace ChunkBuilder
         
         private float3 Raycast(float3 p0, float3 p1, float g0)
         {
-            const int linearSearchSteps = 6;
-            const int binarySearchSteps = 8;
+            const int linearSearchSteps = 4;
+            const int binarySearchSteps = 4;
             const float targetDist = .001f;
             float step = 1f / linearSearchSteps;
 
@@ -131,7 +132,9 @@ namespace ChunkBuilder
             var e = int2.zero;
             var grid = new NativeArray<float>(8, Allocator.Temp);
             var ATA = new NativeArray<float>(6, Allocator.Temp);
-
+            float g0, g1, t;
+            int j, k, a, b;
+            
             R[0] = 1;
             R[1] = DataSize + 1;
             R[2] = R[1] * R[1];
@@ -163,18 +166,44 @@ namespace ChunkBuilder
 
                         edgeMask = SurfaceNets.EDGE_TABLE[mask];
                         edgeCount = 0;
+                        //float3 v = float3.zero;
+                        float3 normal = float3.zero;
 
                         QefSolver.ClearMatTri(ref ATA);
                         var ATb = float4.zero;
                         var pointaccum = float4.zero;
 
-                        for (i = 0; i < 12; ++i)
+                        for (i = 0; i < 12 && edgeCount < 6; ++i)
                         {
                             if ((edgeMask & (1 << i)) == 0)
                                 continue;
 
                             e[0] = SurfaceNets.CUBE_EDGES[i << 1];
                             e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
+
+                            //g0 = grid[e[0]];
+                            //g1 = grid[e[1]];
+                            //t = g0 - g1;
+
+                            //if (Mathf.Abs(t) > 1e-6)
+                            //    t = g0 / t;
+                            //else continue;
+
+                            //for (j = 0, k = 1; j < 3; ++j, k <<= 1)
+                            //{
+                            //    a = e[0] & k;
+                            //    b = e[1] & k;
+                            //    if (a != b)
+                            //        v[j] = (a > 0) ? 1f - t : t;
+                            //    else
+                            //        v[j] = (a > 0) ? 1f : 0f;
+                            //}
+
+                            //v += cellPos;
+                            //v = v * CellSize + ChunkMin;
+
+                            //n = math.normalize(math.lerp(CalcNormal(p0), CalcNormal(p1), t));
+                            //QefSolver.Add(n, v, ref ATA, ref ATb, ref pointaccum);
 
                             p0 = SurfaceNets.CUBE_VERTS[e[0]] + cellPos;
                             p1 = SurfaceNets.CUBE_VERTS[e[1]] + cellPos;
@@ -187,6 +216,7 @@ namespace ChunkBuilder
 
                             QefSolver.Add(n, p, ref ATA, ref ATb, ref pointaccum);
 
+                            normal += n;
                             edgeCount++;
                         }
 
@@ -194,14 +224,14 @@ namespace ChunkBuilder
 
                         QefSolver.Solve(ATA, ATb, pointaccum, out position);
 
-                        //float3 min = (cellPos * CellSize) + ChunkMin;
-                        //float3 max = min + CellSize;
-                        //if (position.x < min.x || position.x > max.x ||
-                        //    position.y < min.y || position.y > max.y ||
-                        //    position.z < min.z || position.z > max.z)
-                        //{
-                        //    position = pointaccum.xyz / pointaccum.w;
-                        //}
+                        normal *= (1f / edgeCount);
+                        var masspoint = pointaccum.xyz / pointaccum.w;
+                        var dotWithMassPoint = math.max(0, math.dot(normal, math.normalize(position - masspoint)));
+
+                        // gradient descent with inflated position
+                        position += normal * .1f * dotWithMassPoint;
+                        for (j = 0; j < 6; j++)
+                            position -= CalcNormal(position) * Map(position);
 
                         indexCache[m] = meshCounts[0];
                         vertexBuffer[meshCounts[0]++] = position - ChunkMin;
