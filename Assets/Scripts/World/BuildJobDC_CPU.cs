@@ -231,7 +231,11 @@ namespace ChunkBuilder
                         // gradient descent with inflated position
                         position += normal * .1f * dotWithMassPoint;
                         for (j = 0; j < 6; j++)
-                            position -= CalcNormal(position) * Map(position);
+                        {
+                            d = Map(position);
+                            if (math.abs(d) < 0.001f) break;
+                            position -= CalcNormal(position) * d;
+                        }
 
                         indexCache[m] = meshCounts[0];
                         vertexBuffer[meshCounts[0]++] = position - ChunkMin;

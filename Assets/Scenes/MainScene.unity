@@ -156,9 +156,9 @@ MonoBehaviour:
   ChunkSize: 32
   CellSize: 1
   ChunkDims:
-    x: 16
+    x: 8
     y: 3
-    z: 16
+    z: 8
 --- !u!4 &871264438
 Transform:
   m_ObjectHideFlags: 0
