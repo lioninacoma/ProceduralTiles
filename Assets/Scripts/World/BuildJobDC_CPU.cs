@@ -4,7 +4,6 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Burst;
-using UnityEngine;
 
 namespace ChunkBuilder
 {
@@ -31,27 +30,51 @@ namespace ChunkBuilder
         }
 
         private static float OpUnion(float d1, float d2) { return math.min(d1, d2); }
+        private static float OpSubtract(float d1, float d2) { return math.max(-d1, d2); }
+        private static float OpIntersect(float d1, float d2) { return math.max(d1, d2); }
 
-        private static float OpSubtraction(float d1, float d2) { return math.max(-d1, d2); }
-
-        private static float OpIntersection(float d1, float d2) { return math.max(d1, d2); }
-
-        private static float OpSmoothUnion(float d1, float d2, float k)
+        private static float OpUnionSmooth(float d1, float d2, float k)
         {
             float h = math.clamp(0.5f + 0.5f * (d2 - d1) / k, 0f, 1f);
             return math.lerp(d2, d1, h) - k * h * (1f - h);
         }
 
-        private static float OpSmoothSubtraction(float d1, float d2, float k)
+        private static float OpSubtractSmooth(float d1, float d2, float k)
         {
             float h = math.clamp(0.5f - 0.5f * (d2 + d1) / k, 0f, 1f);
             return math.lerp(d2, -d1, h) + k * h * (1f - h);
         }
 
-        float OpSmoothIntersection(float d1, float d2, float k)
+        private static float OpIntersectSmooth(float d1, float d2, float k)
         {
             float h = math.clamp(0.5f - 0.5f * (d2 - d1) / k, 0f, 1f);
             return math.lerp(d2, d1, h) + k * h * (1f - h);
+        }
+
+        private static float3x3 OpRotateX(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(1f, 0f, 0f, 0f, ca, sa, 0f, -sa, ca); }
+        private static float3x3 OpRotateY(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(ca, 0f, sa, 0f, 1f, 0f, -sa, 0f, ca); }
+        private static float3x3 OpRotateZ(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(ca, sa, 0f, -sa, ca, 0f, 0f, 0f, 1f); }
+
+        private static float3 OpRep(float3 p, float s)
+        {
+            return p - s * math.round(p / s);
+        }
+
+        private static float3 OpRepLim(float3 p, float s, float3 l)
+        {
+            return p - s * math.clamp(math.round(p / s), -l, l);
+        }
+
+        private static float3 OpRepLim(float3 p, float s, float3 lima, float3 limb)
+        {
+            return p - s * math.clamp(math.round(p / s), lima, limb);
+        }
+
+        private static float3 OpRepLim(float3 p, float s, float2 lima, float2 limb)
+        {
+            var lima3 = new float3(lima, 0);
+            var limb3 = new float3(limb, 0);
+            return p - s * math.clamp(math.round(p / s), lima3.xzy, limb3.xzy);
         }
 
         private static float SdSphere(float3 p, float s)
@@ -65,24 +88,77 @@ namespace ChunkBuilder
             return math.length(math.max(q, 0.0f)) + math.min(math.max(q.x, math.max(q.y, q.z)), 0.0f);
         }
 
-        private static float Surface(float3 x)
+        private static float SdSurface(float3 x)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.005f) * 100.0f + 20.0f);
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.004f) * 120.0f + 20.0f);
         }
+
+        private static float SdRepLimModel(float3 p, float s, float3 lima, float3 limb)
+        {
+            float d = 1e20f;
+            float3 id = math.round(p / s);
+            float3 o = math.sign(p - s * id);
+            for (int k = 0; k < 2; k++)
+                for (int j = 0; j < 2; j++)
+                    for (int i = 0; i < 2; i++)
+                    {
+                        float3 rid = id + new float3(i, j, k) * o;
+                        rid = math.clamp(rid, lima, limb);
+                        float3 r = p - s * rid;
+                        d = math.min(d, SdModel(r));
+                    }
+            return d;
+        }
+
+        private static float SdRepLimModel(float3 p, float s, float2 lima, float2 limb)
+        {
+            float d = 1e20f;
+            float3 id = math.round(p / s);
+            float3 o = math.sign(p - s * id);
+            var lima3 = new float3(lima, 0);
+            var limb3 = new float3(limb, 0);
+            for (int j = 0; j < 2; j++)
+                for (int i = 0; i < 2; i++)
+                {
+                    float3 rid = id + new float3(i, j, 0) * o;
+                    rid = math.clamp(rid, lima3.xzy, limb3.xzy);
+                    float3 r = p - s * rid;
+                    d = math.min(d, SdModel(r));
+                }
+            return d;
+        }
+
+        private static float SdRepLimModel(float3 p, float s, float3 lima, float3 limb, bool symmetric = false)
+        {
+            if (!symmetric)
+            {
+                return SdRepLimModel(p, s, lima, limb); 
+            }
+            else
+            {
+                return SdModel(OpRepLim(p, s, lima, limb));
+            }
+        }
+
+        private static float SdModel(float3 p)
+        {
+            float r = 6f;
+            return SdBox(p, r);
+        }
+
+        private static readonly float SDF_BIAS = 0.0001f;
 
         private static float Map(float3 x)
         {
-            float r = 60f;
-            float3 p = new float3(60f, 30f, 60f);
-            float d = SdBox(x - (new float3(r, 0, r) + p), r);
-            float s = Surface(x);
-            s = OpSmoothSubtraction(d, s, 8f);
-            return s;
+            float s = SdSurface(x);
+            float d = SdRepLimModel(x - 16f, 20f, 0f, new float3(8f, 2f, 8f), true);
+            s = OpUnion(d, s);
+            return s + SDF_BIAS;
         }
 
         private float3 CalcNormal(float3 x)
         {
-            const float eps = 0.0001f;
+            const float eps = 0.001f;
             float2 h = new float2(eps, 0);
             return math.normalize(new float3(Map(x + h.xyy) - Map(x - h.xyy),
                                              Map(x + h.yxy) - Map(x - h.yxy),
@@ -93,7 +169,7 @@ namespace ChunkBuilder
         {
             const int linearSearchSteps = 8;
             const int binarySearchSteps = 8;
-            const float targetDist = .0001f;
+            const float targetDist = .001f;
             float step = 1f / linearSearchSteps;
 
             float3 p = float3.zero;
@@ -138,7 +214,7 @@ namespace ChunkBuilder
 
         private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
         {
-            int i, m, iu, iv, du, dv;
+            int i, j, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
             int v0, v1, v2, v3;
             float d;
@@ -150,8 +226,6 @@ namespace ChunkBuilder
             var e = int2.zero;
             var grid = new NativeArray<float>(8, Allocator.Temp);
             var ATA = new NativeArray<float>(6, Allocator.Temp);
-            float g0, g1, t;
-            int j, k, a, b;
             
             R[0] = 1;
             R[1] = DataSize + 1;
@@ -184,7 +258,6 @@ namespace ChunkBuilder
 
                         edgeMask = SurfaceNets.EDGE_TABLE[mask];
                         edgeCount = 0;
-                        //float3 v = float3.zero;
                         float3 normal = float3.zero;
 
                         QefSolver.ClearMatTri(ref ATA);
@@ -198,30 +271,6 @@ namespace ChunkBuilder
 
                             e[0] = SurfaceNets.CUBE_EDGES[i << 1];
                             e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
-
-                            //g0 = grid[e[0]];
-                            //g1 = grid[e[1]];
-                            //t = g0 - g1;
-
-                            //if (Mathf.Abs(t) > 1e-6)
-                            //    t = g0 / t;
-                            //else continue;
-
-                            //for (j = 0, k = 1; j < 3; ++j, k <<= 1)
-                            //{
-                            //    a = e[0] & k;
-                            //    b = e[1] & k;
-                            //    if (a != b)
-                            //        v[j] = (a > 0) ? 1f - t : t;
-                            //    else
-                            //        v[j] = (a > 0) ? 1f : 0f;
-                            //}
-
-                            //v += cellPos;
-                            //v = v * CellSize + ChunkMin;
-
-                            //n = math.normalize(math.lerp(CalcNormal(p0), CalcNormal(p1), t));
-                            //QefSolver.Add(n, v, ref ATA, ref ATb, ref pointaccum);
 
                             p0 = SurfaceNets.CUBE_VERTS[e[0]] + cellPos;
                             p1 = SurfaceNets.CUBE_VERTS[e[1]] + cellPos;
@@ -248,10 +297,10 @@ namespace ChunkBuilder
 
                         // gradient descent with inflated position
                         position += normal * .1f * dotWithMassPoint;
-                        for (j = 0; j < 16; j++)
+                        for (j = 0; j < 6; j++)
                         {
                             d = Map(position);
-                            if (math.abs(d) < 0.0001f) break;
+                            if (math.abs(d) < 0.001f) break;
                             position -= CalcNormal(position) * d;
                         }
 

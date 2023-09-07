@@ -6,7 +6,7 @@ using UnityEngine;
 
 public static class QefSolver
 {
-    public static readonly int SVD_NUM_SWEEPS = 5;
+    public static readonly int SVD_NUM_SWEEPS = 8;
     public static readonly float PSEUDO_INVERSE_THRESHOLD = 0.1f;
 
     public static void SvdVmulSym(out float4 result, NativeArray<float> A, float4 v)
