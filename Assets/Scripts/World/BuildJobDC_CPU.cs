@@ -1,4 +1,6 @@
-using System;
+//#define USE_DUAL_CONTOURING
+//#define USE_DC_GRADIENT_DESCENT
+
 using System.Collections;
 using Unity.Collections;
 using Unity.Jobs;
@@ -10,6 +12,9 @@ namespace ChunkBuilder
     [BurstCompile(FloatPrecision.High, FloatMode.Default)]
     public struct BuildJobDC_CPU : IJob
     {
+        private static readonly float SDF_BIAS = 0.00001f;
+        private static readonly int GRADIENT_DESCENT_ITERATIONS = 6;
+
         [WriteOnly] public NativeArray<float3> TempVerticesArray;
         [WriteOnly] public NativeArray<int> TempIndicesArray;
 
@@ -27,65 +32,6 @@ namespace ChunkBuilder
         public void Execute()
         {
             Triangulate(MeshCountsArray, TempIndicesArray, TempVerticesArray, IndexCacheArray);
-        }
-
-        private static float OpUnion(float d1, float d2) { return math.min(d1, d2); }
-        private static float OpSubtract(float d1, float d2) { return math.max(-d1, d2); }
-        private static float OpIntersect(float d1, float d2) { return math.max(d1, d2); }
-
-        private static float OpUnionSmooth(float d1, float d2, float k)
-        {
-            float h = math.clamp(0.5f + 0.5f * (d2 - d1) / k, 0f, 1f);
-            return math.lerp(d2, d1, h) - k * h * (1f - h);
-        }
-
-        private static float OpSubtractSmooth(float d1, float d2, float k)
-        {
-            float h = math.clamp(0.5f - 0.5f * (d2 + d1) / k, 0f, 1f);
-            return math.lerp(d2, -d1, h) + k * h * (1f - h);
-        }
-
-        private static float OpIntersectSmooth(float d1, float d2, float k)
-        {
-            float h = math.clamp(0.5f - 0.5f * (d2 - d1) / k, 0f, 1f);
-            return math.lerp(d2, d1, h) + k * h * (1f - h);
-        }
-
-        private static float3x3 OpRotateX(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(1f, 0f, 0f, 0f, ca, sa, 0f, -sa, ca); }
-        private static float3x3 OpRotateY(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(ca, 0f, sa, 0f, 1f, 0f, -sa, 0f, ca); }
-        private static float3x3 OpRotateZ(float a) { float sa = math.sin(a); float ca = math.cos(a); return new float3x3(ca, sa, 0f, -sa, ca, 0f, 0f, 0f, 1f); }
-
-        private static float3 OpRep(float3 p, float s)
-        {
-            return p - s * math.round(p / s);
-        }
-
-        private static float3 OpRepLim(float3 p, float s, float3 l)
-        {
-            return p - s * math.clamp(math.round(p / s), -l, l);
-        }
-
-        private static float3 OpRepLim(float3 p, float s, float3 lima, float3 limb)
-        {
-            return p - s * math.clamp(math.round(p / s), lima, limb);
-        }
-
-        private static float3 OpRepLim(float3 p, float s, float2 lima, float2 limb)
-        {
-            var lima3 = new float3(lima, 0);
-            var limb3 = new float3(limb, 0);
-            return p - s * math.clamp(math.round(p / s), lima3.xzy, limb3.xzy);
-        }
-
-        private static float SdSphere(float3 p, float s)
-        {
-            return math.length(p) - s;
-        }
-
-        private static float SdBox(float3 p, float3 b)
-        {
-            float3 q = math.abs(p) - b;
-            return math.length(math.max(q, 0.0f)) + math.min(math.max(q.x, math.max(q.y, q.z)), 0.0f);
         }
 
         private static float SdSurface(float3 x)
@@ -136,24 +82,57 @@ namespace ChunkBuilder
             }
             else
             {
-                return SdModel(OpRepLim(p, s, lima, limb));
+                return SdModel(Csg.OpRepLim(p, s, lima, limb));
             }
         }
 
-        private static float SdModel(float3 p)
+        private static float SdModel1(float3 p)
         {
-            float r = 6f;
-            return SdBox(p, r);
+            float d = 4f;
+            float3 ra = new float3(d * 2f, d, d * 2f);
+            float3 dy = new float3(0, d, 0);
+            float3 rb = d;
+            float a = Csg.SdBox(p + dy, ra + .01f);
+            float b = Csg.SdBox(p - dy, rb + .01f);
+            return Csg.OpUnion(a, b);
         }
 
-        private static readonly float SDF_BIAS = 0.0001f;
+        private static readonly float MODEL_RADIUS = 8f;
+        private static readonly float MODEL_RADIUS_BIAS = .01f;
+
+        private static float SdModel(float3 p)
+        {
+            float r = MODEL_RADIUS;
+            return Csg.SdBox(p, r + MODEL_RADIUS_BIAS);
+        }
+
+        private static float Map1(float3 x)
+        {
+            float d;
+
+            // terrain sdf
+            float terrain = SdSurface(x);
+
+            // model sdf
+            float s = MODEL_RADIUS * 2;
+            float3 i2 = math.round(new float3(x.x, 0, x.z) / s);
+            float y = (math.ceil(SdSurface(i2 * s) / s) * s);
+            float3 p = new float3(x.x, x.y + y, x.z) - s;
+            float3 lima = 0f;
+            float3 limb = new float3(1000f, 0f, 1000f);
+            float model = SdRepLimModel(p, s, lima, limb, true);
+
+            // combine sdfs
+            d = Csg.OpUnion(model, terrain);
+            return d + SDF_BIAS;
+        }
 
         private static float Map(float3 x)
         {
-            float s = SdSurface(x);
-            float d = SdRepLimModel(x - 16f, 20f, 0f, new float3(8f, 2f, 8f), true);
-            s = OpUnion(d, s);
-            return s + SDF_BIAS;
+            float d;
+            float terrain = SdSurface(x);
+            d = terrain;
+            return d + SDF_BIAS;
         }
 
         private float3 CalcNormal(float3 x)
@@ -167,8 +146,8 @@ namespace ChunkBuilder
         
         private float3 Raycast(float3 p0, float3 p1, float g0)
         {
-            const int linearSearchSteps = 8;
-            const int binarySearchSteps = 8;
+            const int linearSearchSteps = 4;
+            const int binarySearchSteps = 4;
             const float targetDist = .001f;
             float step = 1f / linearSearchSteps;
 
@@ -212,141 +191,183 @@ namespace ChunkBuilder
             return p;
         }
 
-        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
+        private void TriangulateCell(int3 cellPos, bool placeCentroid, NativeArray<float> grid, NativeArray<float> ATA, NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
         {
             int i, j, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
             int v0, v1, v2, v3;
-            float d;
-            float3 position, p, n, p0, p1, vi;
-            var cellPos = int3.zero;
-            int3 cellDims = ChunkSize;
+
+            float d, s, gcScale, gcDot;
+
+            float3 position, normal, masspoint, p, n, p0, p1, vi;
+            int3 cellMin, cellMax;
+            int2 e = int2.zero;
+
             var R = int3.zero;
-            var x = int3.zero;
-            var e = int2.zero;
-            var grid = new NativeArray<float>(8, Allocator.Temp);
-            var ATA = new NativeArray<float>(6, Allocator.Temp);
-            
             R[0] = 1;
             R[1] = DataSize + 1;
             R[2] = R[1] * R[1];
 
-            for (x[2] = 0; x[2] < cellDims[2]; ++x[2])
+            bufNo = cellPos[2];
+            m = 1 + R[1] * (1 + bufNo * R[1]);
+            m += (cellPos[0] + cellPos[1] * (DataSize - 1) + 2 * cellPos[1]);
+
+            mask = 0;
+
+            for (i = 0; i < 8; i++)
             {
-                for (x[1] = 0; x[1] < cellDims[1]; ++x[1])
+                vi = SurfaceNets.CUBE_VERTS[i] + cellPos;
+                d = Map(vi * CellSize + ChunkMin);
+                grid[i] = d;
+                mask |= (d > 0) ? (1 << i) : 0;
+            }
+
+            if (mask == 0 || mask == 0xff)
+                return;
+
+            edgeMask = SurfaceNets.EDGE_TABLE[mask];
+            edgeCount = 0;
+            position = float3.zero;
+
+#if USE_DUAL_CONTOURING
+            QefSolver.ClearMatTri(ref ATA);
+            var ATb = float4.zero;
+            var pointaccum = float4.zero;
+            normal = float3.zero;
+#endif
+
+            for (i = 0; i < 12 && edgeCount < 6 && !placeCentroid; ++i)
+            {
+                if ((edgeMask & (1 << i)) == 0)
+                    continue;
+
+                e[0] = SurfaceNets.CUBE_EDGES[i << 1];
+                e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
+
+                p0 = SurfaceNets.CUBE_VERTS[e[0]] + cellPos;
+                p1 = SurfaceNets.CUBE_VERTS[e[1]] + cellPos;
+
+                p0 = p0 * CellSize + ChunkMin;
+                p1 = p1 * CellSize + ChunkMin;
+
+                p = Raycast(p0, p1, grid[e[0]]);
+
+#if USE_DUAL_CONTOURING
+                n = CalcNormal(p);
+                QefSolver.Add(n, p, ref ATA, ref ATb, ref pointaccum);
+                normal += n;
+#endif
+
+                position += p;
+                edgeCount++;
+            }
+
+            if (edgeCount == 0 && !placeCentroid) 
+                return;
+
+            cellMin = cellPos * CellSize + ChunkMin;
+            cellMax = cellMin + CellSize;
+
+            if (placeCentroid)
+            {
+                position = (cellMin + cellMax) / 2;
+            }
+            else
+            {
+                s = 1f / edgeCount;
+                position *= s;
+                masspoint = position;
+
+#if USE_DUAL_CONTOURING
+                normal = math.normalize(normal * s);
+                QefSolver.Solve(ATA, ATb, pointaccum, out position);
+                gcDot = math.max(0, math.dot(normal, math.normalize(position - masspoint)));
+                gcScale = .1f * gcDot;
+#if USE_DC_GRADIENT_DESCENT
+                // gradient descent with inflated position
+                position += normal * gcScale;
+                for (j = 0; j < GRADIENT_DESCENT_ITERATIONS; j++)
                 {
-                    for (x[0] = 0; x[0] < cellDims[0]; ++x[0])
+                    d = Map(position);
+                    if (math.abs(d) < 0.001f) break;
+                    position -= CalcNormal(position) * d;
+                }
+#endif
+#endif
+            }
+
+            indexCache[m] = meshCounts[0];
+            vertexBuffer[meshCounts[0]++] = position - ChunkMin;
+
+            for (i = 0; i < 3; ++i)
+            {
+                if ((edgeMask & (1 << i)) == 0)
+                    continue;
+
+                iu = (i + 1) % 3;
+                iv = (i + 2) % 3;
+
+                if (cellPos[iu] == 0 || cellPos[iv] == 0)
+                    continue;
+
+                du = R[iu];
+                dv = R[iv];
+
+                v0 = indexCache[m];
+                v1 = indexCache[m - du];
+                v2 = indexCache[m - dv];
+                v3 = indexCache[m - du - dv];
+
+                if ((mask & 1) > 0)
+                {
+                    indexBuffer[meshCounts[1]++] = v0;
+                    indexBuffer[meshCounts[1]++] = v3;
+                    indexBuffer[meshCounts[1]++] = v1;
+
+                    indexBuffer[meshCounts[1]++] = v0;
+                    indexBuffer[meshCounts[1]++] = v2;
+                    indexBuffer[meshCounts[1]++] = v3;
+                }
+                else
+                {
+                    indexBuffer[meshCounts[1]++] = v0;
+                    indexBuffer[meshCounts[1]++] = v3;
+                    indexBuffer[meshCounts[1]++] = v2;
+
+                    indexBuffer[meshCounts[1]++] = v0;
+                    indexBuffer[meshCounts[1]++] = v1;
+                    indexBuffer[meshCounts[1]++] = v3;
+                }
+            }
+        }
+
+        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
+        {
+            var grid = new NativeArray<float>(8, Allocator.Temp);
+            var ATA = new NativeArray<float>(6, Allocator.Temp);
+
+            var cellPos = int3.zero;
+            int3 cellDims = ChunkSize;
+            int3 worldSize = new int3(16, 4, 16);
+            int3 chunkSize = ChunkSize * CellSize;
+            worldSize *= chunkSize;
+
+            for (cellPos[2] = 0; cellPos[2] < cellDims[2]; ++cellPos[2])
+            {
+                for (cellPos[1] = 0; cellPos[1] < cellDims[1]; ++cellPos[1])
+                {
+                    for (cellPos[0] = 0; cellPos[0] < cellDims[0]; ++cellPos[0])
                     {
-                        cellPos.x = x[0]; cellPos.y = x[1]; cellPos.z = x[2];
+                        int p = 4;
+                        //var cellMin = cellPos * CellSize + ChunkMin;
+                        //bool placeCentroid = 
+                        //    cellMin[0] > p && cellMin[0] < worldSize[0] - p &&
+                        //    cellMin[2] > p && cellMin[2] < worldSize[2] - p;
+                        bool placeCentroid =
+                            cellPos[0] > p && cellPos[0] < cellDims[0] - p &&
+                            cellPos[2] > p && cellPos[2] < cellDims[2] - p;
 
-                        bufNo = x[2];
-                        m = 1 + R[1] * (1 + bufNo * R[1]);
-                        m += (x[0] + x[1] * (DataSize - 1) + 2 * x[1]);
-
-                        mask = 0;
-
-                        for (i = 0; i < 8; i++)
-                        {
-                            vi = SurfaceNets.CUBE_VERTS[i] + cellPos;
-                            d = Map(vi * CellSize + ChunkMin);
-                            grid[i] = d;
-                            mask |= (d > 0) ? (1 << i) : 0;
-                        }
-
-                        if (mask == 0 || mask == 0xff)
-                            continue;
-
-                        edgeMask = SurfaceNets.EDGE_TABLE[mask];
-                        edgeCount = 0;
-                        float3 normal = float3.zero;
-
-                        QefSolver.ClearMatTri(ref ATA);
-                        var ATb = float4.zero;
-                        var pointaccum = float4.zero;
-
-                        for (i = 0; i < 12 && edgeCount < 6; ++i)
-                        {
-                            if ((edgeMask & (1 << i)) == 0)
-                                continue;
-
-                            e[0] = SurfaceNets.CUBE_EDGES[i << 1];
-                            e[1] = SurfaceNets.CUBE_EDGES[(i << 1) + 1];
-
-                            p0 = SurfaceNets.CUBE_VERTS[e[0]] + cellPos;
-                            p1 = SurfaceNets.CUBE_VERTS[e[1]] + cellPos;
-
-                            p0 = p0 * CellSize + ChunkMin;
-                            p1 = p1 * CellSize + ChunkMin;
-
-                            p = Raycast(p0, p1, grid[e[0]]);
-                            n = CalcNormal(p);
-
-                            QefSolver.Add(n, p, ref ATA, ref ATb, ref pointaccum);
-
-                            normal += n;
-                            edgeCount++;
-                        }
-
-                        if (edgeCount == 0) continue;
-
-                        QefSolver.Solve(ATA, ATb, pointaccum, out position);
-
-                        normal *= (1f / edgeCount);
-                        var masspoint = pointaccum.xyz / pointaccum.w;
-                        var dotWithMassPoint = math.max(0, math.dot(normal, math.normalize(position - masspoint)));
-
-                        // gradient descent with inflated position
-                        position += normal * .1f * dotWithMassPoint;
-                        for (j = 0; j < 6; j++)
-                        {
-                            d = Map(position);
-                            if (math.abs(d) < 0.001f) break;
-                            position -= CalcNormal(position) * d;
-                        }
-
-                        indexCache[m] = meshCounts[0];
-                        vertexBuffer[meshCounts[0]++] = position - ChunkMin;
-
-                        for (i = 0; i < 3; ++i)
-                        {
-                            if ((edgeMask & (1 << i)) == 0)
-                                continue;
-
-                            iu = (i + 1) % 3;
-                            iv = (i + 2) % 3;
-
-                            if (x[iu] == 0 || x[iv] == 0)
-                                continue;
-
-                            du = R[iu];
-                            dv = R[iv];
-
-                            v0 = indexCache[m];
-                            v1 = indexCache[m - du];
-                            v2 = indexCache[m - dv];
-                            v3 = indexCache[m - du - dv];
-
-                            if ((mask & 1) > 0)
-                            {
-                                indexBuffer[meshCounts[1]++] = v0;
-                                indexBuffer[meshCounts[1]++] = v3;
-                                indexBuffer[meshCounts[1]++] = v1;
-
-                                indexBuffer[meshCounts[1]++] = v0;
-                                indexBuffer[meshCounts[1]++] = v2;
-                                indexBuffer[meshCounts[1]++] = v3;
-                            }
-                            else
-                            {
-                                indexBuffer[meshCounts[1]++] = v0;
-                                indexBuffer[meshCounts[1]++] = v3;
-                                indexBuffer[meshCounts[1]++] = v2;
-
-                                indexBuffer[meshCounts[1]++] = v0;
-                                indexBuffer[meshCounts[1]++] = v1;
-                                indexBuffer[meshCounts[1]++] = v3;
-                            }
-                        }
+                        TriangulateCell(cellPos, placeCentroid, grid, ATA, meshCounts, indexBuffer, vertexBuffer, indexCache);
                     }
                 }
             }
