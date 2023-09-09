@@ -15,11 +15,11 @@ namespace ChunkBuilder
         private static readonly float SDF_BIAS = 0.00001f;
         private static readonly int GRADIENT_DESCENT_ITERATIONS = 6;
 
-        [WriteOnly] public NativeArray<float3> TempVerticesArray;
-        [WriteOnly] public NativeArray<int> TempIndicesArray;
+        [WriteOnly] public NativeArray<float3> VertexBuffer;
+        [WriteOnly] public NativeArray<int> IndexBuffer;
 
-        public NativeArray<int> IndexCacheArray;
-        public NativeArray<int> MeshCountsArray;
+        public NativeArray<int> IndexCache;
+        public NativeArray<int> MeshCounts;
 
         [ReadOnly] public int BufferSize;
         [ReadOnly] public int DataSize;
@@ -31,7 +31,7 @@ namespace ChunkBuilder
 
         public void Execute()
         {
-            Triangulate(MeshCountsArray, TempIndicesArray, TempVerticesArray, IndexCacheArray);
+            Triangulate();
         }
 
         private static float SdSurface(float3 x)
@@ -191,7 +191,7 @@ namespace ChunkBuilder
             return p;
         }
 
-        private void TriangulateCell(int3 cellPos, bool placeCentroid, NativeArray<float> grid, NativeArray<float> ATA, NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
+        private void TriangulateCell(int3 cellPos, bool placeCentroid, NativeArray<float> grid, NativeArray<float> ATA)
         {
             int i, j, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
@@ -296,8 +296,8 @@ namespace ChunkBuilder
 #endif
             }
 
-            indexCache[m] = meshCounts[0];
-            vertexBuffer[meshCounts[0]++] = position - ChunkMin;
+            IndexCache[m] = MeshCounts[0];
+            VertexBuffer[MeshCounts[0]++] = position - ChunkMin;
 
             for (i = 0; i < 3; ++i)
             {
@@ -313,35 +313,35 @@ namespace ChunkBuilder
                 du = R[iu];
                 dv = R[iv];
 
-                v0 = indexCache[m];
-                v1 = indexCache[m - du];
-                v2 = indexCache[m - dv];
-                v3 = indexCache[m - du - dv];
+                v0 = IndexCache[m];
+                v1 = IndexCache[m - du];
+                v2 = IndexCache[m - dv];
+                v3 = IndexCache[m - du - dv];
 
                 if ((mask & 1) > 0)
                 {
-                    indexBuffer[meshCounts[1]++] = v0;
-                    indexBuffer[meshCounts[1]++] = v3;
-                    indexBuffer[meshCounts[1]++] = v1;
+                    IndexBuffer[MeshCounts[1]++] = v0;
+                    IndexBuffer[MeshCounts[1]++] = v3;
+                    IndexBuffer[MeshCounts[1]++] = v1;
 
-                    indexBuffer[meshCounts[1]++] = v0;
-                    indexBuffer[meshCounts[1]++] = v2;
-                    indexBuffer[meshCounts[1]++] = v3;
+                    IndexBuffer[MeshCounts[1]++] = v0;
+                    IndexBuffer[MeshCounts[1]++] = v2;
+                    IndexBuffer[MeshCounts[1]++] = v3;
                 }
                 else
                 {
-                    indexBuffer[meshCounts[1]++] = v0;
-                    indexBuffer[meshCounts[1]++] = v3;
-                    indexBuffer[meshCounts[1]++] = v2;
+                    IndexBuffer[MeshCounts[1]++] = v0;
+                    IndexBuffer[MeshCounts[1]++] = v3;
+                    IndexBuffer[MeshCounts[1]++] = v2;
 
-                    indexBuffer[meshCounts[1]++] = v0;
-                    indexBuffer[meshCounts[1]++] = v1;
-                    indexBuffer[meshCounts[1]++] = v3;
+                    IndexBuffer[MeshCounts[1]++] = v0;
+                    IndexBuffer[MeshCounts[1]++] = v1;
+                    IndexBuffer[MeshCounts[1]++] = v3;
                 }
             }
         }
 
-        private void Triangulate(NativeArray<int> meshCounts, NativeArray<int> indexBuffer, NativeArray<float3> vertexBuffer, NativeArray<int> indexCache)
+        private void Triangulate()
         {
             var grid = new NativeArray<float>(8, Allocator.Temp);
             var ATA = new NativeArray<float>(6, Allocator.Temp);
@@ -367,7 +367,7 @@ namespace ChunkBuilder
                             cellPos[0] > p && cellPos[0] < cellDims[0] - p &&
                             cellPos[2] > p && cellPos[2] < cellDims[2] - p;
 
-                        TriangulateCell(cellPos, placeCentroid, grid, ATA, meshCounts, indexBuffer, vertexBuffer, indexCache);
+                        TriangulateCell(cellPos, placeCentroid, grid, ATA);
                     }
                 }
             }

@@ -23,7 +23,7 @@ namespace ChunkBuilder
         private int CellSize;
         private int ChunkSize;
 
-        private BuildJobDC_CPU CurrentJob;
+        private BuildJob_CPU CurrentJob;
         private ChunkBuilder.JobParams CurrentParams;
         private ChunkBuilder Builder;
         private bool JobActive;
@@ -66,7 +66,7 @@ namespace ChunkBuilder
         {
             if (JobActive) return true;
 
-            CurrentJob = new BuildJobDC_CPU
+            CurrentJob = new BuildJob_CPU
             {
                 ChunkMin = Params.ChunkMin,
                 ChunkSize = ChunkSize,
@@ -89,10 +89,11 @@ namespace ChunkBuilder
             MeshCountsArray[1] = 0;
 
             var job = CurrentJob;
-            job.IndexCacheArray = IndexCacheArray;
-            job.TempIndicesArray = TempIndicesArray;
-            job.TempVerticesArray = TempVerticesArray;
-            job.MeshCountsArray = MeshCountsArray;
+            job.IndexCache = IndexCacheArray;
+            job.IndexBuffer = TempIndicesArray;
+            job.VertexBuffer = TempVerticesArray;
+            job.MeshCounts = MeshCountsArray;
+            job.SignedDistanceField = SignedDistanceField;
 
             JobActive = true;
 
@@ -100,7 +101,7 @@ namespace ChunkBuilder
             yield return StartCoroutine(UpdateChunk(jobHandle, job));
         }
 
-        private IEnumerator UpdateChunk(JobHandle jobHandle, BuildJobDC_CPU job)
+        private IEnumerator UpdateChunk(JobHandle jobHandle, BuildJob_CPU job)
         {
             yield return new WaitUntil(() => jobHandle.IsCompleted);
             jobHandle.Complete();
