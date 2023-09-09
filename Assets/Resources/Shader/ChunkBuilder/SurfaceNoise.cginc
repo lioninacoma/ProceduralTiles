@@ -62,8 +62,6 @@ float SurfaceSDF(float3 position)
 {
 	float3 x = position;
 	return x.y - (FBM_4(float3(x.x, 0, x.z) * 0.006) * 80.0 + 20.0);
-	return length(x - 127.0) - 127.0;
-    return FBM_4(x * 0.05);
 }
 
 #define SurfaceNoise(p) SurfaceSDF(p)

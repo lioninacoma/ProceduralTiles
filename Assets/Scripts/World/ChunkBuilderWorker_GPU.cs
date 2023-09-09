@@ -1,6 +1,6 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine;
@@ -12,30 +12,45 @@ namespace ChunkBuilder
 {
     public class ChunkBuilderWorker_GPU : MonoBehaviour, IChunkBuilderWorker
     {
-        private class ChunkBufferReadback
+        private class BufferReadback
         {
             public bool IndexBufferReady;
             public bool VertexBufferReady;
+            public bool VolumeBufferReady;
 
             public float3[] VertexBuffer;
             public int[] IndexBuffer;
+            public float[] VolumeBuffer;
 
-            public ChunkBufferReadback()
+            public BufferReadback(bool readbackVolume)
             {
                 IndexBufferReady = false;
                 VertexBufferReady = false;
+                VolumeBufferReady = !readbackVolume;
             }
 
             public void OnReadbackVertexBuffer(AsyncGPUReadbackRequest request)
             {
-                VertexBuffer = request.GetData<float3>().ToArray();
+                var data = request.GetData<float3>();
+                VertexBuffer = data.ToArray(); // copies data
                 VertexBufferReady = true;
+                data.Dispose();
             }
 
             public void OnReadbackIndexBuffer(AsyncGPUReadbackRequest request)
             {
-                IndexBuffer = request.GetData<int>().ToArray();
+                var data = request.GetData<int>();
+                IndexBuffer = data.ToArray(); // copies data
                 IndexBufferReady = true;
+                data.Dispose();
+            }
+
+            public void OnReadbackVolumeBuffer(AsyncGPUReadbackRequest request)
+            {
+                var data = request.GetData<float>();
+                VolumeBuffer = data.ToArray(); // copies data
+                VolumeBufferReady = true;
+                data.Dispose();
             }
         }
 
@@ -164,7 +179,7 @@ namespace ChunkBuilder
         {
             if (JobActive || JobQueue.Count == 0) return;
 
-            int buildCount = Math.Min(JobQueue.Count, MAX_BUFFERS);
+            int buildCount = System.Math.Min(JobQueue.Count, MAX_BUFFERS);
 
             for (int i = 0; i < buildCount; i++)
             {
@@ -181,24 +196,41 @@ namespace ChunkBuilder
             var counts = new Counts[buildCount];
             var nodeKeys = new Vector4[buildCount];
             var dataSizes = new Vector4[buildCount];
+            bool initVolume = false;
+            ChunkBuilder.JobParams job;
+            int volumeOffset;
 
             for (int i = 0; i < buildCount; i++)
             {
-                nodeKeys[i] = new float4(CurrentJobs[i].ChunkMin, CellSize);
+                job = CurrentJobs[i];
+                nodeKeys[i] = new float4(job.ChunkMin, CellSize);
                 dataSizes[i] = new float4(DataSize, 0, 0, 0);
+                initVolume |= job.InitSDF;
+
+                if (!job.InitSDF)
+                {
+                    volumeOffset = i * BufferSize;
+                    SignedDistanceField.SetData(job.SDF, 0, volumeOffset, BufferSize);
+                }
             }
 
             MeshCounts.SetData(counts);
             ActiveCells.SetCounterValue(0);
-
-            BuildVolumeCS.SetVectorArray(_NodeKeys, nodeKeys);
-            BuildVolumeCS.SetVectorArray(_DataSizes, dataSizes);
+            
             GenerateVerticesCS.SetVectorArray(_NodeKeys, nodeKeys);
             GenerateVerticesCS.SetVectorArray(_DataSizes, dataSizes);
             GenerateIndicesCS.SetVectorArray(_DataSizes, dataSizes);
 
-            int groupsY = (int)Mathf.Max(1, Mathf.Ceil(DataSize / (float)CHUNKS_GROUP_SIZE_Y));
-            BuildVolumeCS.Dispatch(BuildVolumeKernelID, buildCount, groupsY, DataSize);
+            int groupsY;
+
+            if (initVolume)
+            {
+                BuildVolumeCS.SetVectorArray(_NodeKeys, nodeKeys);
+                BuildVolumeCS.SetVectorArray(_DataSizes, dataSizes);
+
+                groupsY = (int)Mathf.Max(1, Mathf.Ceil(DataSize / (float)CHUNKS_GROUP_SIZE_Y));
+                BuildVolumeCS.Dispatch(BuildVolumeKernelID, buildCount, groupsY, DataSize);
+            }
 
             groupsY = (int)Mathf.Max(1, Mathf.Ceil(ChunkSize / (float)CHUNKS_GROUP_SIZE_Y));
             GenerateVerticesCS.Dispatch(GenerateVerticesKernelID, buildCount, groupsY, ChunkSize);
@@ -217,15 +249,21 @@ namespace ChunkBuilder
 
                 MeshCounts.GetData(counts);
 
-                var rb = new ChunkBufferReadback();
-                var vertexBufferRequest = AsyncGPUReadback.Request(VertexBuffer, rb.OnReadbackVertexBuffer);
-                var indexBufferRequest = AsyncGPUReadback.Request(IndexBuffer, rb.OnReadbackIndexBuffer);
+                var rb = new BufferReadback(initVolume);
+                AsyncGPUReadback.Request(VertexBuffer, rb.OnReadbackVertexBuffer);
+                AsyncGPUReadback.Request(IndexBuffer, rb.OnReadbackIndexBuffer);
+                
+                if (initVolume)
+                {
+                    AsyncGPUReadback.Request(SignedDistanceField, rb.OnReadbackVolumeBuffer);
+                }
+
                 yield return StartCoroutine(UpdateChunk(rb, counts));
             }
             else
             {
-                foreach (var job in CurrentJobs)
-                    job.Callback(job.ChunkIndex, 0, default);
+                foreach (var j in CurrentJobs)
+                    j.Callback(j.ChunkIndex, 0, null);
             }
 
             JobActive = false;
@@ -233,63 +271,91 @@ namespace ChunkBuilder
             NotifyBuilderReady(WorkerIndex);
         }
 
-        private IEnumerator UpdateChunk(ChunkBufferReadback rb, Counts[] countsArray)
+        private IEnumerator UpdateChunk(BufferReadback rb, Counts[] countsArray)
         {
-            yield return new WaitUntil(() => rb.VertexBufferReady && rb.IndexBufferReady);
+            yield return new WaitUntil(() => rb.VertexBufferReady && rb.IndexBufferReady && rb.VolumeBufferReady);
+
+            ChunkBuilder.JobParams job;
+            Chunk.Data chunkData;
+            Counts counts;
 
             int buildCount = CurrentJobs.Count;
 
             for (int i = 0; i < buildCount; i++)
             {
-                var counts = countsArray[i];
-                var job = CurrentJobs[i];
+                counts = countsArray[i];
+                job = CurrentJobs[i];
 
                 if (counts.IndexCount == 0 || counts.VertexCount == 0)
                 {
-                    job.Callback(job.ChunkIndex, 0, default);
+                    job.Callback(job.ChunkIndex, 0, null);
                 }
                 else
                 {
 
-                    var dataArray = BuildChunkData(i, countsArray[i], rb);
-                    job.Callback(job.ChunkIndex, counts.IndexCount, dataArray);
+                    chunkData = BuildChunkData(i, counts, rb);
+                    job.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
                 }
             }
 
             rb.VertexBuffer = null;
             rb.IndexBuffer = null;
+            rb.VolumeBuffer = null;
         }
 
-        private Mesh.MeshDataArray BuildChunkData(int chunkId, Counts counts, ChunkBufferReadback rb)
+        private Chunk.Data BuildChunkData(int chunkId, Counts counts, BufferReadback rb)
         {
+            var job = CurrentJobs[chunkId];
+
             var dataArray = Mesh.AllocateWritableMeshData(1);
             var data = dataArray[0];
 
-            int vertexCount = counts.VertexCount;
+            //int vertexCount = counts.VertexCount;
             int indexCount = counts.IndexCount * 3;
             int vertexOffset = chunkId * ChunkBuilder.VERTEX_BUFFER_SIZE;
             int indexOffset = chunkId * ChunkBuilder.INDEX_BUFFER_SIZE;
+            int volumeOffset = chunkId * BufferSize;
 
-            data.SetVertexBufferParams(vertexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
+            data.SetVertexBufferParams(indexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
             data.SetIndexBufferParams(indexCount, ChunkBuilder.INDEX_FORMAT);
 
+            int i;
             var vertices = data.GetVertexData<float3>();
             var indices = data.GetIndexData<int>();
+            NativeArray<float> volume;
 
-            for (int i = 0; i < vertexCount; i++)
+            if (job.InitSDF)
             {
-                vertices[i] = rb.VertexBuffer[vertexOffset + i];
+                volume = new NativeArray<float>(BufferSize, Allocator.Persistent);
+                
+                for (i = 0; i < BufferSize; i++)
+                {
+                    volume[i] = rb.VolumeBuffer[volumeOffset + i];
+                }
+            }
+            else
+            {
+                volume = job.SDF;
             }
 
-            for (int i = 0; i < indexCount; i++)
+            for (i = 0; i < indexCount; i++)
             {
-                indices[i] = rb.IndexBuffer[indexOffset + i];
+                vertices[i] = rb.VertexBuffer[vertexOffset + rb.IndexBuffer[indexOffset + i]];
+            }
+
+            for (i = 0; i < indexCount; i++)
+            {
+                indices[i] = i;
             }
 
             data.subMeshCount = 1;
             data.SetSubMesh(0, new SubMeshDescriptor(0, indexCount));
 
-            return dataArray;
+            return new Chunk.Data()
+            {
+                MeshData = dataArray,
+                SDF = volume
+            };
         }
 
         public bool IsJobActive()

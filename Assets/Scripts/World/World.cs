@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
-using ChunkBuilder;
 
 [RequireComponent(typeof(ChunkBuilder.ChunkBuilder))]
 public class World : MonoBehaviour
@@ -40,12 +39,12 @@ public class World : MonoBehaviour
         ChunkBuilder.AddJob(chunkMin, chunkIndex, OnChunkBuilt);
     }
 
-    private void OnChunkBuilt(int chunkIndex, int indexCount, Mesh.MeshDataArray dataArray)
+    private void OnChunkBuilt(int chunkIndex, int indexCount, Chunk.Data data)
     {
         if (indexCount > 0)
         {
             var chunk = AddChunk(PendingChunks[chunkIndex]);
-            chunk.SetMesh(dataArray);
+            chunk.SetChunkData(data);
         }
     }
 

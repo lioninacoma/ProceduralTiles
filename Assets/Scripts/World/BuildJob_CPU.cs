@@ -25,14 +25,19 @@ namespace ChunkBuilder
         [ReadOnly] public int ChunkSize;
         [ReadOnly] public int CellSize;
         [ReadOnly] public int ChunkIndex;
+        [ReadOnly] public bool InitSDF;
 
         public void Execute()
         {
-            BuildVolume();
+            if (InitSDF)
+            {
+                InitVolume();
+            }
+            
             Triangulate();
         }
 
-        private void BuildVolume()
+        private void InitVolume()
         {
             int x, y, z;
             int3 maxIt = ChunkSize;

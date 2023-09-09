@@ -1,7 +1,7 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Collections;
 using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -23,9 +23,11 @@ namespace ChunkBuilder
 
         public struct JobParams
         {
-            public Action<int, int, Mesh.MeshDataArray> Callback;
+            public System.Action<int, int, Chunk.Data> Callback;
             public int3 ChunkMin;
             public int ChunkIndex;
+            public bool InitSDF;
+            public NativeArray<float> SDF;
         }
 
         private List<IChunkBuilderWorker> Workers;
@@ -64,12 +66,25 @@ namespace ChunkBuilder
             }
         }
 
-        public void AddJob(int3 chunkMin, int chunkIndex, Action<int, int, Mesh.MeshDataArray> callback)
+        public void AddJob(int3 chunkMin, int chunkIndex, System.Action<int, int, Chunk.Data> callback)
         {
             PendingBuildJobs.Enqueue(new JobParams()
             {
                 ChunkMin = chunkMin,
                 ChunkIndex = chunkIndex,
+                InitSDF = true,
+                Callback = callback
+            });
+        }
+
+        public void AddJob(int3 chunkMin, int chunkIndex, NativeArray<float> sdf, System.Action<int, int, Chunk.Data> callback)
+        {
+            PendingBuildJobs.Enqueue(new JobParams()
+            {
+                ChunkMin = chunkMin,
+                ChunkIndex = chunkIndex,
+                SDF = sdf,
+                InitSDF = false,
                 Callback = callback
             });
         }
@@ -87,7 +102,7 @@ namespace ChunkBuilder
         {
             if (AvailableWorkers.Count == 0 || PendingBuildJobs.Count == 0) return;
 
-            int maxJobsCount = Math.Min(PendingBuildJobs.Count, MAX_CONCURRENT_SCHEDULED_JOBS);
+            int maxJobsCount = System.Math.Min(PendingBuildJobs.Count, MAX_CONCURRENT_SCHEDULED_JOBS);
 
             for (int i = 0; i < maxJobsCount && AvailableWorkers.Count > 0; i++)
             {

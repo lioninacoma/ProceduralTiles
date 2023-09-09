@@ -1,3 +1,4 @@
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -5,11 +6,18 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(MeshCollider))]
 [RequireComponent(typeof(MeshRenderer))]
 public class Chunk : MonoBehaviour
-{
+{    
+    public class Data
+    {
+        public NativeArray<float> SDF;
+        public Mesh.MeshDataArray MeshData;
+    }
+
     private MeshFilter ChunkMeshFilter;
     private MeshRenderer ChunkMeshRenderer;
     private Mesh ChunkMesh;
     private MeshCollider ChunkMeshCollider;
+    private NativeArray<float> SignedDistanceField;
 
     private void Awake()
     {
@@ -33,7 +41,17 @@ public class Chunk : MonoBehaviour
         ChunkMeshCollider = GetComponent<MeshCollider>();
     }
 
-    public void SetMesh(Mesh.MeshDataArray dataArray)
+    private void OnDestroy()
+    {
+        SignedDistanceField.Dispose();
+    }
+
+    public NativeArray<float> GetSignedDistanceField()
+    {
+        return SignedDistanceField;
+    }
+
+    public void SetChunkData(Data data)
     {
         ChunkMesh.Clear();
 
@@ -42,11 +60,13 @@ public class Chunk : MonoBehaviour
         | MeshUpdateFlags.DontValidateIndices
         | MeshUpdateFlags.DontNotifyMeshUsers
         | MeshUpdateFlags.DontResetBoneBounds;
-        Mesh.ApplyAndDisposeWritableMeshData(dataArray, ChunkMesh, flags);
+        Mesh.ApplyAndDisposeWritableMeshData(data.MeshData, ChunkMesh, flags);
 
         ChunkMesh.RecalculateBounds();
         ChunkMesh.RecalculateNormals();
         ChunkMeshCollider.sharedMesh = ChunkMesh;
+
+        SignedDistanceField = data.SDF;
     }
 
     /*private void Update()

@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using Unity.Collections;
 using Unity.Jobs;
@@ -12,11 +11,10 @@ namespace ChunkBuilder
 {
     public class ChunkBuilderWorker_CPU : MonoBehaviour, IChunkBuilderWorker
     {
-        private NativeArray<float> SignedDistanceField;
         private NativeArray<float3> TempVerticesArray;
         private NativeArray<int> TempIndicesArray;
-        private NativeArray<int> IndexCacheArray;
-        private NativeArray<int> MeshCountsArray;
+        private NativeArray<int> TempIndexCacheArray;
+        private NativeArray<int> TempMeshCountsArray;
 
         private int BufferSize;
         private int DataSize;
@@ -35,31 +33,20 @@ namespace ChunkBuilder
             Builder = GetComponentInParent<ChunkBuilder>();
             Builder.GetChunkMeta(out CellSize, out ChunkSize, out DataSize, out BufferSize);
 
-            IndexCacheArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
+            TempIndexCacheArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
             TempIndicesArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
             TempVerticesArray = new NativeArray<float3>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
-            SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
-            MeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
+            TempMeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
 
             JobActive = false;
         }
 
         private void OnDestroy()
         {
-            try
-            {
-                if (IndexCacheArray != null)
-                    IndexCacheArray.Dispose();
-                if (TempIndicesArray != null)
-                    TempIndicesArray.Dispose();
-                if (TempVerticesArray != null)
-                    TempVerticesArray.Dispose();
-                if (SignedDistanceField != null)
-                    SignedDistanceField.Dispose();
-                if (MeshCountsArray != null)
-                    MeshCountsArray.Dispose();
-            }
-            catch (Exception) { }
+            TempIndexCacheArray.Dispose();
+            TempIndicesArray.Dispose();
+            TempVerticesArray.Dispose();
+            TempMeshCountsArray.Dispose();
         }
 
         public bool ScheduleJob(ChunkBuilder.JobParams Params)
@@ -85,15 +72,24 @@ namespace ChunkBuilder
 
         public IEnumerator ExecuteJob()
         {
-            MeshCountsArray[0] = 0;
-            MeshCountsArray[1] = 0;
+            TempMeshCountsArray[0] = 0;
+            TempMeshCountsArray[1] = 0;
 
             var job = CurrentJob;
-            job.IndexCache = IndexCacheArray;
+            job.IndexCache = TempIndexCacheArray;
             job.IndexBuffer = TempIndicesArray;
             job.VertexBuffer = TempVerticesArray;
-            job.MeshCounts = MeshCountsArray;
-            job.SignedDistanceField = SignedDistanceField;
+            job.MeshCounts = TempMeshCountsArray;
+            job.InitSDF = CurrentParams.InitSDF;
+
+            if (job.InitSDF)
+            {
+                job.SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
+            }
+            else
+            {
+                job.SignedDistanceField = CurrentParams.SDF;
+            }
 
             JobActive = true;
 
@@ -107,8 +103,8 @@ namespace ChunkBuilder
             jobHandle.Complete();
 
             var counts = new Counts();
-            counts.VertexCount = MeshCountsArray[0];
-            counts.IndexCount = MeshCountsArray[1];
+            counts.VertexCount = TempMeshCountsArray[0];
+            counts.IndexCount = TempMeshCountsArray[1];
 
             var Params = CurrentParams;
 
@@ -136,11 +132,18 @@ namespace ChunkBuilder
                 data.subMeshCount = 1;
                 data.SetSubMesh(0, new SubMeshDescriptor(0, counts.IndexCount));
 
-                Params.Callback(job.ChunkIndex, counts.IndexCount, dataArray);
+                var chunkData = new Chunk.Data()
+                {
+                    MeshData = dataArray,
+                    SDF = job.SignedDistanceField
+                };
+
+                Params.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
             }
             else
             {
-                Params.Callback(job.ChunkIndex, 0, default);
+                job.SignedDistanceField.Dispose();
+                Params.Callback(job.ChunkIndex, 0, null);
             }
 
             JobActive = false;
