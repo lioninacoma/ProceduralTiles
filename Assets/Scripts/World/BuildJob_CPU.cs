@@ -217,7 +217,7 @@ namespace ChunkBuilder
                 {
                     for (cellPos[0] = 0; cellPos[0] < cellDims[0]; ++cellPos[0])
                     {
-                        TriangulateCell(cellPos, grid, false);
+                        TriangulateCell(cellPos, grid, true);
                     }
                 }
             }

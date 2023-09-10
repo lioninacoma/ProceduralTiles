@@ -92,10 +92,7 @@ namespace ChunkBuilder
         public void GetChunkMeta(out int CellSize, out int ChunkSize, out int DataSize, out int BufferSize)
         {
             var world = GetComponentInParent<World>();
-            CellSize = world.CellSize;
-            ChunkSize = (world.ChunkSize / CellSize) + 1;
-            DataSize = ChunkSize + 1;
-            BufferSize = DataSize * DataSize * DataSize;
+            world.GetChunkMeta(out CellSize, out ChunkSize, out DataSize, out BufferSize);
         }
 
         private void Update()
