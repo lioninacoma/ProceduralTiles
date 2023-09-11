@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Mathematics;
 using Unity.VisualScripting;
@@ -28,6 +27,7 @@ namespace ChunkBuilder
             public int ChunkIndex;
             public bool InitSDF;
             public NativeArray<float> SDF;
+            public NativeArray<bool> CCs;
         }
 
         private List<IChunkBuilderWorker> Workers;
@@ -77,13 +77,14 @@ namespace ChunkBuilder
             });
         }
 
-        public void AddJob(int3 chunkMin, int chunkIndex, NativeArray<float> sdf, System.Action<int, int, Chunk.Data> callback)
+        public void AddJob(int3 chunkMin, int chunkIndex, NativeArray<float> sdf, NativeArray<bool> ccs, System.Action<int, int, Chunk.Data> callback)
         {
             PendingBuildJobs.Enqueue(new JobParams()
             {
                 ChunkMin = chunkMin,
                 ChunkIndex = chunkIndex,
                 SDF = sdf,
+                CCs = ccs,
                 InitSDF = false,
                 Callback = callback
             });

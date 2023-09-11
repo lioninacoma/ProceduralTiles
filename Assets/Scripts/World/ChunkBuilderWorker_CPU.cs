@@ -85,10 +85,15 @@ namespace ChunkBuilder
             if (job.InitSDF)
             {
                 job.SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
+                job.CentroidCellBuffer = new NativeArray<bool>(BufferSize, Allocator.Persistent);
+                
+                for (int i = 0; i < BufferSize; i++)
+                    job.CentroidCellBuffer[i] = false;
             }
             else
             {
                 job.SignedDistanceField = CurrentParams.SDF;
+                job.CentroidCellBuffer = CurrentParams.CCs;
             }
 
             JobActive = true;
@@ -135,7 +140,8 @@ namespace ChunkBuilder
                 var chunkData = new Chunk.Data()
                 {
                     MeshData = dataArray,
-                    SDF = job.SignedDistanceField
+                    SDF = job.SignedDistanceField,
+                    CCs = job.CentroidCellBuffer
                 };
 
                 Params.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
@@ -143,6 +149,7 @@ namespace ChunkBuilder
             else
             {
                 job.SignedDistanceField.Dispose();
+                job.CentroidCellBuffer.Dispose();
                 Params.Callback(job.ChunkIndex, 0, null);
             }
 

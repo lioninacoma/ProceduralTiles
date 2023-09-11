@@ -1,8 +1,11 @@
+using MBaske.Octree;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.UIElements;
+using static UnityEditor.PlayerSettings;
 
 [RequireComponent(typeof(ChunkBuilder.ChunkBuilder))]
 public class World : MonoBehaviour
@@ -15,6 +18,7 @@ public class World : MonoBehaviour
     private Chunk[] Chunks;
     private Dictionary<int, int3> PendingChunks;
     private LayerMask ChunkMask;
+    private Node<Chunk> ChunkTree;
 
     private void Awake()
     {
@@ -22,6 +26,11 @@ public class World : MonoBehaviour
         ChunkBuilder = GetComponent<ChunkBuilder.ChunkBuilder>();
         Chunks = new Chunk[ChunkDims.x * ChunkDims.y * ChunkDims.z];
         PendingChunks = new Dictionary<int, int3>();
+        
+        float rootSize = math.max(ChunkDims.x, math.max(ChunkDims.y, ChunkDims.z));
+        rootSize *= ChunkSize;
+
+        ChunkTree = new Node<Chunk>(Vector3.one * (rootSize / 2f), rootSize);
     }
 
     void Start()
@@ -54,10 +63,10 @@ public class World : MonoBehaviour
         return new int3(p / ChunkSize) * ChunkSize;
     }
 
-    private int3 ToCellPos(int3 min, float3 p, float3 n)
+    private static int3 ToCellPos(int3 min, float3 p, float3 n)
     {
-        int3 c = new int3(p - n * .1f) - min;
-        return c + 1;
+        int3 c = new int3(p - n * .001f) - min;
+        return c;
     }
 
     private void BuildChunk(int3 min)
@@ -78,10 +87,10 @@ public class World : MonoBehaviour
         PendingChunks.Remove(chunkIndex);
     }
 
-    private void UpdateChunk(int3 min, NativeArray<float> sdf)
+    private void UpdateChunk(int3 min, NativeArray<float> sdf, NativeArray<bool> ccs)
     {
         int chunkIndex = GetChunkIndex(min);
-        ChunkBuilder.AddJob(min, chunkIndex, sdf, OnChunkUpdated);
+        ChunkBuilder.AddJob(min, chunkIndex, sdf, ccs, OnChunkUpdated);
     }
 
     private void OnChunkUpdated(int chunkIndex, int indexCount, Chunk.Data data)
@@ -98,14 +107,25 @@ public class World : MonoBehaviour
     private Chunk AddChunk(int3 min)
     {
         int chunkIndex = GetChunkIndex(min);
+        var pos = new Vector3(min.x, min.y, min.z);
 
         var chunkObj = new GameObject("chunk_" + min);
         chunkObj.transform.SetParent(transform);
-        chunkObj.transform.localPosition = new float3(min);
+        chunkObj.transform.localPosition = pos;
         chunkObj.transform.localScale = Vector3.one;
 
         var chunk = chunkObj.AddComponent<Chunk>();
+        chunk.ChunkMin = min;
+        chunk.ChunkSize = ChunkSize;
+
+        var bounds = new Bounds();
+        bounds.SetMinMax(pos, pos + Vector3.one * ChunkSize);
+
+        chunk.Bounds = bounds;
+        chunk.Position = bounds.center;
+
         Chunks[chunkIndex] = chunk;
+        ChunkTree.Add(chunk);
 
         return chunk;
     }
@@ -121,14 +141,23 @@ public class World : MonoBehaviour
             {
                 var localPoint = transform.InverseTransformPoint(hitInfo.point);
                 var localNormal = transform.InverseTransformDirection(hitInfo.normal);
-                var min = ToChunkMin(localPoint);
-                var index = GetChunkIndex(min);
-                var chunk = Chunks[index];
+                var localMin = ToChunkMin(localPoint);
 
-                var cellPos = ToCellPos(min, localPoint, -localNormal); // normal * -1 for voxel placement; normal * +1 for voxel removal
-                chunk.SetVolumeData(cellPos, -1); // -1 for voxel placement; 1 for voxel removal
+                int size = 4;
+                var pos = new Vector3((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
+                var bounds = new Bounds(pos, size * Vector3.one);
 
-                UpdateChunk(min, chunk.GetVolume());
+                var results = new HashSet<Chunk>();
+                ChunkTree.FindBoundsIntersectBounds(results, bounds);
+
+                Debug.Log(results.Count + " chunks updating ...");
+
+                foreach (var chunk in results)
+                {
+                    int3 p = ToCellPos(chunk.ChunkMin, localPoint, localNormal) + 1;
+                    chunk.SetVoxelCubeOnGrid(p, size, false);
+                    UpdateChunk(chunk.ChunkMin, chunk.GetVolume(), chunk.GetCentroidCells());
+                }
             }
         }
     }

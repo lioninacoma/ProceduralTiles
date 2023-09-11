@@ -18,6 +18,8 @@ namespace ChunkBuilder
         public NativeArray<int> IndexCache;
         public NativeArray<int> MeshCounts;
 
+        [ReadOnly] public NativeArray<bool> CentroidCellBuffer;
+
         [ReadOnly] public int BufferSize;
         [ReadOnly] public int DataSize;
 
@@ -53,9 +55,10 @@ namespace ChunkBuilder
                     }
         }
 
-        private float SurfaceSDF(float3 x)
+        private static float SurfaceSDF(float3 x)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
+            //return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
+            return x.y - 30f;
         }
 
         private void SetVolumeData(int3 p, float density)
@@ -72,7 +75,14 @@ namespace ChunkBuilder
             return SignedDistanceField[index];
         }
 
-        private void TriangulateCell(int3 cellPos, NativeArray<float> grid, bool placeCentroid)
+        private bool IsCentroidCell(int3 p)
+        {
+            int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
+            if (index < 0 || index > BufferSize) return false;
+            return CentroidCellBuffer[index];
+        }
+
+        private void TriangulateCell(int3 cellPos, NativeArray<float> grid, bool isCentroidCell)
         {
             int a, b, i, j, k, m, iu, iv, du, dv;
             int mask, edgeMask, edgeCount, bufNo;
@@ -112,7 +122,7 @@ namespace ChunkBuilder
             edgeMask = SurfaceNets.EDGE_TABLE[mask];
             edgeCount = 0;
 
-            for (i = 0; i < 12 && edgeCount < 6 && !placeCentroid; ++i)
+            for (i = 0; i < 12 && edgeCount < 6 && !isCentroidCell; ++i)
             {
                 if ((edgeMask & (1 << i)) == 0)
                     continue;
@@ -143,13 +153,13 @@ namespace ChunkBuilder
                 edgeCount++;
             }
 
-            if (edgeCount == 0 && !placeCentroid) 
+            if (edgeCount == 0 && !isCentroidCell) 
                 return;
 
             cellMin = cellPos * CellSize;
             cellMax = cellMin + CellSize;
 
-            if (placeCentroid)
+            if (isCentroidCell)
             {
                 position = (cellMin + cellMax) / 2;
             }
@@ -212,15 +222,12 @@ namespace ChunkBuilder
             int3 cellDims = ChunkSize;
 
             for (cellPos[2] = 0; cellPos[2] < cellDims[2]; ++cellPos[2])
-            {
                 for (cellPos[1] = 0; cellPos[1] < cellDims[1]; ++cellPos[1])
-                {
                     for (cellPos[0] = 0; cellPos[0] < cellDims[0]; ++cellPos[0])
                     {
+                        bool isCentroidCell = IsCentroidCell(cellPos);
                         TriangulateCell(cellPos, grid, true);
                     }
-                }
-            }
         }
     }
 }
