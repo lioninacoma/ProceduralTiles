@@ -138,8 +138,8 @@ public class World : MonoBehaviour
         
         var bounds = new Bounds();
         bounds.SetMinMax(
-            pos - (.1f * Vector3.one), 
-            pos + (size * new Vector3(1, 1, 1)) + (.1f * Vector3.one));
+            pos - (0.1f * Vector3.one),
+            pos + (size * Vector3.one) + (0.1f * Vector3.one));
         DebugBounds = bounds;
 
         var nodes = new HashSet<ChunkNode>();
