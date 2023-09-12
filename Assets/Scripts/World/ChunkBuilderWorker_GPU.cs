@@ -310,13 +310,13 @@ namespace ChunkBuilder
             var dataArray = Mesh.AllocateWritableMeshData(1);
             var data = dataArray[0];
 
-            //int vertexCount = counts.VertexCount;
+            int vertexCount = counts.VertexCount;
             int indexCount = counts.IndexCount * 3;
             int vertexOffset = chunkId * ChunkBuilder.VERTEX_BUFFER_SIZE;
             int indexOffset = chunkId * ChunkBuilder.INDEX_BUFFER_SIZE;
             int volumeOffset = chunkId * BufferSize;
 
-            data.SetVertexBufferParams(indexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
+            data.SetVertexBufferParams(vertexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
             data.SetIndexBufferParams(indexCount, ChunkBuilder.INDEX_FORMAT);
 
             int i;
@@ -338,14 +338,14 @@ namespace ChunkBuilder
                 volume = job.SDF;
             }
 
-            for (i = 0; i < indexCount; i++)
+            for (i = 0; i < vertexCount; i++)
             {
-                vertices[i] = rb.VertexBuffer[vertexOffset + rb.IndexBuffer[indexOffset + i]];
+                vertices[i] = rb.VertexBuffer[vertexOffset + i];
             }
 
             for (i = 0; i < indexCount; i++)
             {
-                indices[i] = i;
+                indices[i] = rb.IndexBuffer[indexOffset + i];
             }
 
             data.subMeshCount = 1;

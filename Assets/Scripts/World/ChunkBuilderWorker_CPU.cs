@@ -16,7 +16,6 @@ namespace ChunkBuilder
         private NativeArray<int> TempIndexCacheArray;
         private NativeArray<int> TempMeshCountsArray;
         private NativeArray<float> TempSignedDistanceField;
-        private NativeArray<bool> TempCentroidCells;
 
         private int BufferSize;
         private int DataSize;
@@ -40,7 +39,6 @@ namespace ChunkBuilder
             TempVerticesArray = new NativeArray<float3>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
             TempMeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
             TempSignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
-            TempCentroidCells = new NativeArray<bool>(BufferSize, Allocator.Persistent);
 
             JobActive = false;
         }
@@ -52,7 +50,6 @@ namespace ChunkBuilder
             TempVerticesArray.Dispose();
             TempMeshCountsArray.Dispose();
             TempSignedDistanceField.Dispose();
-            TempCentroidCells.Dispose();
         }
 
         public bool ScheduleJob(ChunkBuilder.JobParams Params)
@@ -88,12 +85,10 @@ namespace ChunkBuilder
             job.MeshCounts = TempMeshCountsArray;
             job.InitSDF = CurrentParams.InitSDF;
             job.SignedDistanceField = TempSignedDistanceField;
-            job.CentroidCellBuffer = TempCentroidCells;
 
             if (!job.InitSDF)
             {
                 job.SignedDistanceField = CurrentParams.SDF;
-                job.CentroidCellBuffer = CurrentParams.CCs;
             }
 
             JobActive = true;
@@ -118,34 +113,31 @@ namespace ChunkBuilder
                 var dataArray = Mesh.AllocateWritableMeshData(1);
                 var data = dataArray[0];
 
-                data.SetVertexBufferParams(counts.IndexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
+                data.SetVertexBufferParams(counts.VertexCount, ChunkBuilder.VERTEX_ATTRIBUTES);
                 data.SetIndexBufferParams(counts.IndexCount, ChunkBuilder.INDEX_FORMAT);
 
                 var vertices = data.GetVertexData<float3>();
                 var indices = data.GetIndexData<int>();
 
-                for (int i = 0; i < counts.IndexCount; i++)
+                for (int i = 0; i < counts.VertexCount; i++)
                 {
-                    vertices[i] = TempVerticesArray[TempIndicesArray[i]];
+                    vertices[i] = TempVerticesArray[i];
                 }
 
                 for (int i = 0; i < counts.IndexCount; i++)
                 {
-                    indices[i] = i;
+                    indices[i] = TempIndicesArray[i];
                 }
 
                 NativeArray<float> signedDistanceField = job.SignedDistanceField;
-                NativeArray<bool> centroidCells = job.CentroidCellBuffer;
 
                 if (job.InitSDF)
                 {
                     signedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
-                    centroidCells = new NativeArray<bool>(BufferSize, Allocator.Persistent);
                     
                     for (int i = 0; i < BufferSize; i++)
                     {
                         signedDistanceField[i] = TempSignedDistanceField[i];
-                        centroidCells[i] = TempCentroidCells[i];
                     }
                 }
 
@@ -155,8 +147,7 @@ namespace ChunkBuilder
                 var chunkData = new Chunk.Data()
                 {
                     MeshData = dataArray,
-                    SDF = signedDistanceField,
-                    CCs = centroidCells
+                    SDF = signedDistanceField
                 };
 
                 Params.Callback(job.ChunkIndex, counts.IndexCount, chunkData);

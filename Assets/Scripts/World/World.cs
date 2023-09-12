@@ -17,12 +17,9 @@ public class World : MonoBehaviour
     private Dictionary<int, ChunkNode> PendingNodes;
     private LayerMask ChunkMask;
     private Node<ChunkNode> ChunkTree;
-    private int BufferSize;
 
     private void Awake()
     {
-        GetChunkMeta(out _, out _, out _, out BufferSize);
-
         ChunkMask = LayerMask.GetMask("Chunk");
         ChunkBuilder = GetComponent<ChunkBuilder.ChunkBuilder>();
         Chunks = new Chunk[ChunkDims.x * ChunkDims.y * ChunkDims.z];
@@ -89,10 +86,10 @@ public class World : MonoBehaviour
         PendingNodes.Remove(chunkIndex);
     }
 
-    private void UpdateChunk(int3 min, NativeArray<float> sdf, NativeArray<bool> ccs)
+    private void UpdateChunk(int3 min, NativeArray<float> sdf)
     {
         int chunkIndex = GetChunkIndex(min);
-        ChunkBuilder.AddJob(min, chunkIndex, sdf, ccs, OnChunkUpdated);
+        ChunkBuilder.AddJob(min, chunkIndex, sdf, OnChunkUpdated);
     }
 
     private void OnChunkUpdated(int chunkIndex, int indexCount, Chunk.Data data)
@@ -156,10 +153,10 @@ public class World : MonoBehaviour
             if (chunk == null) // empty chunk
             {
                 chunk = AddChunk(node);
-                chunk.InitEmptyBuffers(maxValue, true); // FIXME: defaults to unsolid sdf (air)
+                chunk.InitEmptyBuffers(maxValue); // FIXME: defaults to unsolid sdf (air)
             }
 
-            chunk.SetVoxelCube(p, size, place);
+            chunk.SetCubeVolume(p, size, place);
             updatingChunks.Add(GetChunkIndex(chunk.Min));
         }
     }
@@ -195,7 +192,7 @@ public class World : MonoBehaviour
                 foreach (int index in updatingChunks)
                 {
                     var chunk = Chunks[index];
-                    UpdateChunk(chunk.Min, chunk.GetVolume(), chunk.GetCentroidCells());
+                    UpdateChunk(chunk.Min, chunk.GetVolume());
                 }
             }
         }

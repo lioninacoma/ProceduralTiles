@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
@@ -17,8 +15,6 @@ namespace ChunkBuilder
         public NativeArray<float> SignedDistanceField;
         public NativeArray<int> IndexCache;
         public NativeArray<int> MeshCounts;
-
-        [ReadOnly] public NativeArray<bool> CentroidCellBuffer;
 
         [ReadOnly] public int BufferSize;
         [ReadOnly] public int DataSize;
@@ -73,13 +69,6 @@ namespace ChunkBuilder
             int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
             if (index < 0 || index >= BufferSize) return default;
             return SignedDistanceField[index];
-        }
-
-        private bool IsCentroidCell(int3 p)
-        {
-            int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-            if (index < 0 || index > BufferSize) return false;
-            return CentroidCellBuffer[index];
         }
 
         private void TriangulateCell(int3 cellPos, NativeArray<float> grid, bool isCentroidCell)
@@ -225,8 +214,7 @@ namespace ChunkBuilder
                 for (cellPos[1] = 0; cellPos[1] < cellDims[1]; ++cellPos[1])
                     for (cellPos[0] = 0; cellPos[0] < cellDims[0]; ++cellPos[0])
                     {
-                        bool isCentroidCell = IsCentroidCell(cellPos);
-                        TriangulateCell(cellPos, grid, isCentroidCell);
+                        TriangulateCell(cellPos, grid, false);
                     }
         }
     }
