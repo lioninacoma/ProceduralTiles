@@ -15,6 +15,8 @@ namespace ChunkBuilder
         private NativeArray<int> TempIndicesArray;
         private NativeArray<int> TempIndexCacheArray;
         private NativeArray<int> TempMeshCountsArray;
+        private NativeArray<float> TempSignedDistanceField;
+        private NativeArray<bool> TempCentroidCells;
 
         private int BufferSize;
         private int DataSize;
@@ -37,6 +39,8 @@ namespace ChunkBuilder
             TempIndicesArray = new NativeArray<int>(ChunkBuilder.INDEX_BUFFER_SIZE, Allocator.Persistent);
             TempVerticesArray = new NativeArray<float3>(ChunkBuilder.VERTEX_BUFFER_SIZE, Allocator.Persistent);
             TempMeshCountsArray = new NativeArray<int>(2, Allocator.Persistent);
+            TempSignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
+            TempCentroidCells = new NativeArray<bool>(BufferSize, Allocator.Persistent);
 
             JobActive = false;
         }
@@ -47,6 +51,8 @@ namespace ChunkBuilder
             TempIndicesArray.Dispose();
             TempVerticesArray.Dispose();
             TempMeshCountsArray.Dispose();
+            TempSignedDistanceField.Dispose();
+            TempCentroidCells.Dispose();
         }
 
         public bool ScheduleJob(ChunkBuilder.JobParams Params)
@@ -81,16 +87,10 @@ namespace ChunkBuilder
             job.VertexBuffer = TempVerticesArray;
             job.MeshCounts = TempMeshCountsArray;
             job.InitSDF = CurrentParams.InitSDF;
+            job.SignedDistanceField = TempSignedDistanceField;
+            job.CentroidCellBuffer = TempCentroidCells;
 
-            if (job.InitSDF)
-            {
-                job.SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
-                job.CentroidCellBuffer = new NativeArray<bool>(BufferSize, Allocator.Persistent);
-                
-                for (int i = 0; i < BufferSize; i++)
-                    job.CentroidCellBuffer[i] = false;
-            }
-            else
+            if (!job.InitSDF)
             {
                 job.SignedDistanceField = CurrentParams.SDF;
                 job.CentroidCellBuffer = CurrentParams.CCs;
@@ -134,22 +134,35 @@ namespace ChunkBuilder
                     indices[i] = i;
                 }
 
+                NativeArray<float> signedDistanceField = job.SignedDistanceField;
+                NativeArray<bool> centroidCells = job.CentroidCellBuffer;
+
+                if (job.InitSDF)
+                {
+                    signedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
+                    centroidCells = new NativeArray<bool>(BufferSize, Allocator.Persistent);
+                    
+                    for (int i = 0; i < BufferSize; i++)
+                    {
+                        signedDistanceField[i] = TempSignedDistanceField[i];
+                        centroidCells[i] = TempCentroidCells[i];
+                    }
+                }
+
                 data.subMeshCount = 1;
                 data.SetSubMesh(0, new SubMeshDescriptor(0, counts.IndexCount));
 
                 var chunkData = new Chunk.Data()
                 {
                     MeshData = dataArray,
-                    SDF = job.SignedDistanceField,
-                    CCs = job.CentroidCellBuffer
+                    SDF = signedDistanceField,
+                    CCs = centroidCells
                 };
 
                 Params.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
             }
             else
             {
-                job.SignedDistanceField.Dispose();
-                job.CentroidCellBuffer.Dispose();
                 Params.Callback(job.ChunkIndex, 0, null);
             }
 

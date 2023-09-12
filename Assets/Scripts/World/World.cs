@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static UnityEditor.PlayerSettings;
 
 [RequireComponent(typeof(ChunkBuilder.ChunkBuilder))]
 public class World : MonoBehaviour
@@ -16,21 +14,24 @@ public class World : MonoBehaviour
 
     private ChunkBuilder.ChunkBuilder ChunkBuilder;
     private Chunk[] Chunks;
-    private Dictionary<int, int3> PendingChunks;
+    private Dictionary<int, ChunkNode> PendingNodes;
     private LayerMask ChunkMask;
-    private Node<Chunk> ChunkTree;
+    private Node<ChunkNode> ChunkTree;
+    private int BufferSize;
 
     private void Awake()
     {
+        GetChunkMeta(out _, out _, out _, out BufferSize);
+
         ChunkMask = LayerMask.GetMask("Chunk");
         ChunkBuilder = GetComponent<ChunkBuilder.ChunkBuilder>();
         Chunks = new Chunk[ChunkDims.x * ChunkDims.y * ChunkDims.z];
-        PendingChunks = new Dictionary<int, int3>();
+        PendingNodes = new Dictionary<int, ChunkNode>();
         
         float rootSize = math.max(ChunkDims.x, math.max(ChunkDims.y, ChunkDims.z));
         rootSize *= ChunkSize;
 
-        ChunkTree = new Node<Chunk>(Vector3.one * (rootSize / 2f), rootSize);
+        ChunkTree = new Node<ChunkNode>(Vector3.one * (rootSize / 2f), rootSize);
     }
 
     void Start()
@@ -40,7 +41,19 @@ public class World : MonoBehaviour
                 for (int x = 0; x < ChunkDims.x; x++)
                 {
                     int3 min = new int3(x, y, z) * ChunkSize;
-                    BuildChunk(min);
+
+                    var pos = new Vector3(min.x, min.y, min.z);
+                    var node = new ChunkNode();
+                    var bounds = new Bounds();
+                    bounds.SetMinMax(pos, pos + Vector3.one * ChunkSize);
+
+                    node.Min = min;
+                    node.Size = ChunkSize;
+                    node.Bounds = bounds;
+                    node.Position = bounds.center;
+
+                    BuildChunk(node);
+                    ChunkTree.Add(node);
                 }
     }
 
@@ -58,33 +71,22 @@ public class World : MonoBehaviour
         return Utils.I3(i.x, i.y, i.z, ChunkDims.x, ChunkDims.y);
     }
 
-    private int3 ToChunkMin(float3 p)
+    private void BuildChunk(ChunkNode node)
     {
-        return new int3(p / ChunkSize) * ChunkSize;
-    }
-
-    private static int3 ToCellPos(int3 min, float3 p, float3 n)
-    {
-        int3 c = new int3(p - n * .001f) - min;
-        return c;
-    }
-
-    private void BuildChunk(int3 min)
-    {
-        int chunkIndex = GetChunkIndex(min);
-        PendingChunks[chunkIndex] = min;
-        ChunkBuilder.AddJob(min, chunkIndex, OnChunkBuilt);
+        int chunkIndex = GetChunkIndex(node.Min);
+        PendingNodes[chunkIndex] = node;
+        ChunkBuilder.AddJob(node.Min, chunkIndex, OnChunkBuilt);
     }
 
     private void OnChunkBuilt(int chunkIndex, int indexCount, Chunk.Data data)
     {
         if (indexCount > 0)
         {
-            var chunk = AddChunk(PendingChunks[chunkIndex]);
+            var chunk = AddChunk(PendingNodes[chunkIndex]);
             chunk.SetChunkData(data);
         }
 
-        PendingChunks.Remove(chunkIndex);
+        PendingNodes.Remove(chunkIndex);
     }
 
     private void UpdateChunk(int3 min, NativeArray<float> sdf, NativeArray<bool> ccs)
@@ -101,11 +103,12 @@ public class World : MonoBehaviour
             chunk.SetChunkData(data);
         }
 
-        PendingChunks.Remove(chunkIndex);
+        PendingNodes.Remove(chunkIndex);
     }
 
-    private Chunk AddChunk(int3 min)
+    private Chunk AddChunk(ChunkNode node)
     {
+        int3 min = node.Min;
         int chunkIndex = GetChunkIndex(min);
         var pos = new Vector3(min.x, min.y, min.z);
 
@@ -115,20 +118,53 @@ public class World : MonoBehaviour
         chunkObj.transform.localScale = Vector3.one;
 
         var chunk = chunkObj.AddComponent<Chunk>();
-        chunk.ChunkMin = min;
-        chunk.ChunkSize = ChunkSize;
-
-        var bounds = new Bounds();
-        bounds.SetMinMax(pos, pos + Vector3.one * ChunkSize);
-
-        chunk.Bounds = bounds;
-        chunk.Position = bounds.center;
+        chunk.Min = min;
+        chunk.Size = node.Size;
 
         Chunks[chunkIndex] = chunk;
-        ChunkTree.Add(chunk);
+        node.Chunk = chunk;
 
         return chunk;
     }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireCube(transform.TransformPoint(DebugBounds.center), transform.TransformVector(DebugBounds.size));
+    }
+
+    private void SetVoxels(Vector3 pos, int size, bool place, HashSet<int> updatingChunks)
+    {
+        const float maxValue = 100000f;
+        int3 p;
+        Chunk chunk;
+        
+        var bounds = new Bounds();
+        bounds.SetMinMax(
+            pos - (.1f * Vector3.one), 
+            pos + (size * new Vector3(1, 1, 1)) + (.1f * Vector3.one));
+        DebugBounds = bounds;
+
+        var nodes = new HashSet<ChunkNode>();
+        ChunkTree.FindBoundsIntersectBounds(nodes, bounds);
+
+        foreach (var node in nodes)
+        {
+            p = new int3(pos) - node.Min;
+            chunk = node.Chunk;
+
+            if (chunk == null) // empty chunk
+            {
+                chunk = AddChunk(node);
+                chunk.InitEmptyBuffers(maxValue, true); // FIXME: defaults to unsolid sdf (air)
+            }
+
+            chunk.SetVoxelCube(p, size, place);
+            updatingChunks.Add(GetChunkIndex(chunk.Min));
+        }
+    }
+
+    private Bounds DebugBounds;
 
     private void Update()
     {
@@ -139,24 +175,27 @@ public class World : MonoBehaviour
 
             if (Physics.Raycast(mouseRay, out RaycastHit hitInfo, 10000f, ChunkMask))
             {
-                var localPoint = transform.InverseTransformPoint(hitInfo.point);
-                var localNormal = transform.InverseTransformDirection(hitInfo.normal);
-                var localMin = ToChunkMin(localPoint);
+                var point = transform.InverseTransformPoint(hitInfo.point);
+                var normal = transform.InverseTransformDirection(hitInfo.normal);
 
-                int size = 4;
-                var pos = new Vector3((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
-                var bounds = new Bounds(pos, size * Vector3.one);
+                int gridSize = 5;
+                bool place = false;
+                
+                var gridPos = new Vector3(
+                    (int)((point.x + normal.x * (place ? 1 : -1)) / gridSize) * gridSize,
+                    (int)((point.y + normal.y * (place ? 1 : -1)) / gridSize) * gridSize,
+                    (int)((point.z + normal.z * (place ? 1 : -1)) / gridSize) * gridSize);
 
-                var results = new HashSet<Chunk>();
-                ChunkTree.FindBoundsIntersectBounds(results, bounds);
+                var updatingChunks = new HashSet<int>();
 
-                Debug.Log(results.Count + " chunks updating ...");
+                SetVoxels(gridPos, gridSize, place, updatingChunks);
+                SetVoxels(gridPos - new Vector3(0, 1, 0) * gridSize, gridSize, true, updatingChunks);  // set solid below
+                SetVoxels(gridPos + new Vector3(0, 1, 0) * gridSize, gridSize, false, updatingChunks); // set air above
 
-                foreach (var chunk in results)
+                foreach (int index in updatingChunks)
                 {
-                    int3 p = ToCellPos(chunk.ChunkMin, localPoint, localNormal) + 1;
-                    chunk.SetVoxelCubeOnGrid(p, size, false);
-                    UpdateChunk(chunk.ChunkMin, chunk.GetVolume(), chunk.GetCentroidCells());
+                    var chunk = Chunks[index];
+                    UpdateChunk(chunk.Min, chunk.GetVolume(), chunk.GetCentroidCells());
                 }
             }
         }

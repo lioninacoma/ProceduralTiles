@@ -1,4 +1,3 @@
-using MBaske.Octree;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
@@ -7,7 +6,7 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshCollider))]
 [RequireComponent(typeof(MeshRenderer))]
-public class Chunk : MonoBehaviour, INodeContent
+public class Chunk : MonoBehaviour
 {    
     public class Data
     {
@@ -26,10 +25,8 @@ public class Chunk : MonoBehaviour, INodeContent
     private int BufferSize;
     private int DataSize;
 
-    public int3 ChunkMin { get; set; }
-    public int ChunkSize { get; set; }
-    public Bounds Bounds { get; set; }
-    public Vector3 Position { get; set; }
+    public int3 Min { get; set; }
+    public int Size { get; set; }
 
     private void Awake()
     {
@@ -75,41 +72,70 @@ public class Chunk : MonoBehaviour, INodeContent
 
     public void SetVolumeData(int3 p, float density)
     {
+        if (p.x < 0 || 
+            p.y < 0 || 
+            p.z < 0 || 
+            p.x >= DataSize ||
+            p.y >= DataSize || 
+            p.z >= DataSize)
+        {
+            return;
+        }
+
         int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-        if (index < 0 || index >= BufferSize) return;
         SignedDistanceField[index] = density;
     }
 
     public void SetCentroidCell(int3 p, bool isCentroid)
     {
+        if (p.x < 0 ||
+            p.y < 0 ||
+            p.z < 0 ||
+            p.x >= DataSize ||
+            p.y >= DataSize ||
+            p.z >= DataSize)
+        {
+            return;
+        }
+
         int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
-        if (index < 0 || index >= BufferSize) return;
         CentroidCells[index] = isCentroid;
     }
 
-    public void SetVoxelCubeOnGrid(int3 p, int size, bool place)
+    public void SetVoxelCube(int3 p, int size, bool place)
     {
-        int3 gridPos = (p / size) * size;
         int3 la, lb, l;
         int x, y, z;
 
-        //la = 0; lb = size;
-        //for (z = la.z; z <= lb.z; z++)
-        //    for (y = la.y; y <= lb.y; y++)
-        //        for (x = la.x; x <= lb.x; x++)
-        //        {
-        //            l = gridPos + new int3(x, y, z);
-        //            SetCentroidCell(l - 1, !place);
-        //        }
-
-        la = 0; lb = size - 1;
+        la = 1; lb = size - 1;
         for (z = la.z; z <= lb.z; z++)
             for (y = la.y; y <= lb.y; y++)
                 for (x = la.x; x <= lb.x; x++)
                 {
-                    l = gridPos + new int3(x, y, z);
-                    SetVolumeData(l, (place) ? 0 : 1);
+                    l = p + new int3(x, y, z);
+                    SetCentroidCell(l, true);
                 }
+
+        la = 1; lb = size;
+        for (z = la.z; z <= lb.z; z++)
+            for (y = la.y; y <= lb.y; y++)
+                for (x = la.x; x <= lb.x; x++)
+                {
+                    l = p + new int3(x, y, z);
+                    SetVolumeData(l, place ? -1 : 1);
+                }
+    }
+
+    public void InitEmptyBuffers(float defaultSDF, bool defaultCC)
+    {
+        SignedDistanceField = new NativeArray<float>(BufferSize, Allocator.Persistent);
+        CentroidCells = new NativeArray<bool>(BufferSize, Allocator.Persistent);
+
+        for (int i = 0; i < BufferSize; i++)
+        {
+            SignedDistanceField[i] = defaultSDF;
+            CentroidCells[i] = defaultCC;
+        }
     }
 
     public void SetChunkData(Data data)

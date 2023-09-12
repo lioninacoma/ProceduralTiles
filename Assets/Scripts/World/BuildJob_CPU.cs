@@ -57,8 +57,8 @@ namespace ChunkBuilder
 
         private static float SurfaceSDF(float3 x)
         {
-            //return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
-            return x.y - 30f;
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
+            //return x.y - 30f;
         }
 
         private void SetVolumeData(int3 p, float density)
@@ -226,7 +226,7 @@ namespace ChunkBuilder
                     for (cellPos[0] = 0; cellPos[0] < cellDims[0]; ++cellPos[0])
                     {
                         bool isCentroidCell = IsCentroidCell(cellPos);
-                        TriangulateCell(cellPos, grid, true);
+                        TriangulateCell(cellPos, grid, isCentroidCell);
                     }
         }
     }
