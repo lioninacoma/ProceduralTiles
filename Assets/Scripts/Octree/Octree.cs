@@ -893,16 +893,16 @@ namespace MBaske.Octree
         /// Gizmo-draws the node's bounds.
         /// </summary>
         /// <param name="contentsOnly">Whether to only draw inf node contains content objects.</param>
-        public void DrawNodeBounds(bool contentsOnly = true)
+        public void DrawNodeBounds(Transform transform, bool contentsOnly = true)
         {
             for (int i = 0, n = NumChildren; i < n; i++)
             {
-                m_Children[i].DrawNodeBounds(contentsOnly);
+                m_Children[i].DrawNodeBounds(transform, contentsOnly);
             }
 
             if (!contentsOnly || Contents.Count > 0)
             {
-                Gizmos.DrawWireCube(m_Bounds.center, m_Bounds.size);
+                Gizmos.DrawWireCube(transform.TransformPoint(m_Bounds.center), transform.TransformVector(m_Bounds.size));
             }
         }
 

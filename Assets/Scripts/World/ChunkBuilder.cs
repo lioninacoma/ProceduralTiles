@@ -11,8 +11,8 @@ namespace ChunkBuilder
     public class ChunkBuilder : MonoBehaviour
     {
         public static readonly IndexFormat INDEX_FORMAT = IndexFormat.UInt32;
-        public static readonly int VERTEX_BUFFER_SIZE = 16000;
-        public static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 3;
+        public static readonly int VERTEX_BUFFER_SIZE = 8000;
+        public static readonly int INDEX_BUFFER_SIZE = VERTEX_BUFFER_SIZE * 6;
         public static readonly int INDEX_CACHE_SIZE = INDEX_BUFFER_SIZE;
         public static readonly VertexAttributeDescriptor[] VERTEX_ATTRIBUTES = new[] {
             new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3)
@@ -22,7 +22,7 @@ namespace ChunkBuilder
 
         public struct JobParams
         {
-            public System.Action<int, int, Chunk.Data> Callback;
+            public System.Action<int, int, int, Chunk.Data> Callback;
             public int3 ChunkMin;
             public int ChunkIndex;
             public bool InitSDF;
@@ -65,7 +65,7 @@ namespace ChunkBuilder
             }
         }
 
-        public void AddJob(int3 chunkMin, int chunkIndex, System.Action<int, int, Chunk.Data> callback)
+        public void AddJob(int3 chunkMin, int chunkIndex, System.Action<int, int, int, Chunk.Data> callback)
         {
             PendingBuildJobs.Enqueue(new JobParams()
             {
@@ -76,7 +76,7 @@ namespace ChunkBuilder
             });
         }
 
-        public void AddJob(int3 chunkMin, int chunkIndex, NativeArray<float> sdf, System.Action<int, int, Chunk.Data> callback)
+        public void AddJob(int3 chunkMin, int chunkIndex, NativeArray<float> sdf, System.Action<int, int, int, Chunk.Data> callback)
         {
             PendingBuildJobs.Enqueue(new JobParams()
             {

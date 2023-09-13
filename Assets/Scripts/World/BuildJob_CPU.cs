@@ -53,8 +53,8 @@ namespace ChunkBuilder
 
         private static float SurfaceSDF(float3 x)
         {
-            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.006f) * 80.0f + 20.0f);
-            //return x.y - 30f;
+            return x.y - (Noise.FBM_4(new float3(x.x, 0, x.z) * 0.005f) * 100.0f + 40.0f);
+            //return x.y - 10f;
         }
 
         private void SetVolumeData(int3 p, float density)

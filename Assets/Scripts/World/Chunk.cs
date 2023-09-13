@@ -62,35 +62,59 @@ public class Chunk : MonoBehaviour
         return Volume;
     }
 
+    public float GetVolumeData(int3 p)
+    {
+        int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
+        if (index < 0 || index >= BufferSize) return -100000f;
+        return Volume[index];
+    }
+
     public void SetVolumeData(int3 p, float density)
     {
-        if (p.x < 0 || 
-            p.y < 0 || 
-            p.z < 0 || 
-            p.x >= DataSize ||
-            p.y >= DataSize || 
-            p.z >= DataSize)
-        {
-            return;
-        }
-
         int index = Utils.I3(p.x, p.y, p.z, DataSize, DataSize);
+        if (index < 0 || index >= BufferSize) return;
         Volume[index] = density;
     }
 
-    public void SetCubeVolume(int3 p, int size, bool place)
+    public void SetCubeVolume(int3 p, int size, bool place, float smooth)
     {
         int3 la, lb, l;
         int x, y, z;
+        float d0, d1, d;
+        const float eps = .1f;
+        float r = size * .5f;
+        float3 s, c = new float3(p) + r;
 
-        la = 1; lb = size;
+        la = -(int)smooth; lb = size + (int)math.ceil(smooth);
         for (z = la.z; z <= lb.z; z++)
             for (y = la.y; y <= lb.y; y++)
                 for (x = la.x; x <= lb.x; x++)
                 {
                     l = p + new int3(x, y, z);
-                    SetVolumeData(l, place ? -1 : 1);
+
+                    if (l.x < 0 ||
+                        l.y < 0 ||
+                        l.z < 0 ||
+                        l.x >= DataSize ||
+                        l.y >= DataSize ||
+                        l.z >= DataSize)
+                    {
+                        continue;
+                    }
+
+                    s = l;
+                    d0 = GetVolumeData(l);
+                    d1 = Csg.SdBox(s - c, r + eps);
+                    d = place 
+                        ? Csg.OpUnionSmooth(d0, d1, smooth) 
+                        : Csg.OpSubtractSmooth(d1, d0, smooth);
+                    SetVolumeData(l, d);
                 }
+    }
+
+    public void ClearMesh()
+    {
+        ChunkMesh.Clear();
     }
 
     public void InitEmptyBuffers(float defaultSDF)

@@ -150,11 +150,12 @@ namespace ChunkBuilder
                     SDF = signedDistanceField
                 };
 
-                Params.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
+                Params.Callback(job.ChunkIndex, counts.IndexCount, 0, chunkData);
             }
             else
             {
-                Params.Callback(job.ChunkIndex, 0, null);
+                int emptySign = System.Math.Sign(TempSignedDistanceField[0]);
+                Params.Callback(job.ChunkIndex, 0, emptySign, null);
             }
 
             JobActive = false;

@@ -52,4 +52,16 @@ public static class Utils
         return math.abs(math.dot(planeNormal, point - planePoint));
     }
 
+    public static uint RoundToNextPowerOf2(uint v)
+    {
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
+        return v;
+    }
+
 }

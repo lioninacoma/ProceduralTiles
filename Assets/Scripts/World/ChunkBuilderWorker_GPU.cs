@@ -263,7 +263,7 @@ namespace ChunkBuilder
             else
             {
                 foreach (var j in CurrentJobs)
-                    j.Callback(j.ChunkIndex, 0, null);
+                    j.Callback(j.ChunkIndex, 0, 1, null);
             }
 
             JobActive = false;
@@ -288,13 +288,13 @@ namespace ChunkBuilder
 
                 if (counts.IndexCount == 0 || counts.VertexCount == 0)
                 {
-                    job.Callback(job.ChunkIndex, 0, null);
+                    job.Callback(job.ChunkIndex, 0, 1, null);
                 }
                 else
                 {
 
                     chunkData = BuildChunkData(i, counts, rb);
-                    job.Callback(job.ChunkIndex, counts.IndexCount, chunkData);
+                    job.Callback(job.ChunkIndex, counts.IndexCount, 0, chunkData);
                 }
             }
 

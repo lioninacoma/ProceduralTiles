@@ -7,7 +7,6 @@ using UnityEngine;
 
 using static Iso;
 using static IsoMeshStructs;
-using System.Runtime.CompilerServices;
 
 public class IsoOctree
 {
