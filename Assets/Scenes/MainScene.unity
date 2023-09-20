@@ -157,7 +157,7 @@ MonoBehaviour:
   CellSize: 1
   ChunkDims:
     x: 16
-    y: 16
+    y: 4
     z: 16
 --- !u!4 &871264438
 Transform:

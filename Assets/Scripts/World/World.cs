@@ -191,9 +191,9 @@ public class World : MonoBehaviour
                 var point = transform.InverseTransformPoint(hitInfo.point);
                 var normal = transform.InverseTransformDirection(hitInfo.normal);
 
-                int gridSize = 16;
+                int gridSize = 12;
                 float smooth = 1.5f;
-                bool place = false; 
+                bool place = true; 
                 
                 var gridPos = new Vector3(
                     (int)((point.x + normal.x * (place ? 1 : -1)) / gridSize) * gridSize,
